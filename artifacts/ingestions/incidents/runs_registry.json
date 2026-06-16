@@ -1,20 +1,8 @@
 {
   "runs": [
     {
-      "run_id": "202606161522",
-      "folder": "artifacts/ingestions/incidents/202606161522",
-      "n_rows": 900,
-      "n_columns": 19,
-      "unique_machines": 15,
-      "n_missing_total": 59,
-      "n_missing_per_column": {
-        "comment": 59
-      },
-      "mean_confidence_index": 0.113
-    },
-    {
-      "run_id": "202606161528",
-      "folder": "artifacts/ingestions/incidents/202606161528",
+      "run_id": "202606161715",
+      "folder": "artifacts/ingestions/incidents/202606161715",
       "n_rows": 900,
       "n_columns": 19,
       "unique_machines": 15,

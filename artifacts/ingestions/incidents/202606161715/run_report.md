@@ -1,8 +1,8 @@
-# Run report — 202606161522
+# Run report — 202606161715
 
-- **Source**: `Z:\formation_aelion\project\vs_code\data\raw\incidents.csv`
-- **Run date**: 2026-06-16 15:22
-- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/ingestions/incidents/202606161522`
+- **Source**: `data\raw\incidents.csv`
+- **Run date**: 2026-06-16 17:15
+- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/ingestions/incidents/202606161715`
 
 ## Quality metrics (source data)
 
@@ -39,8 +39,13 @@
 ## Produced artifacts
 
 - `incidents_anonymized.csv`
-- `dist_incidents_day.png`
-- `dist_incidents_week.png`
-- `dist_incidents_shift.png`
-- `hist_signals_machine.png`
-- `corr_incidents_signals.png`
+- `1.1_dist_incidents_day.png`
+- `1.2_dist_incidents_week.png`
+- `1.3_dist_incidents_shift.png`
+- `2.1_hist_incidents_machine.png`
+- `2.2_hist_incidents_operator.png`
+- `2.3_hist_incidents_signal.png`
+- `2.4_hist_incidents_confidence.png`
+- `3.1_corr_severity_signals.png`
+- `3.2_corr_severity_comment.png`
+- `dataset_report.md`
