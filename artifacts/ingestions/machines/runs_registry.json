@@ -1,0 +1,16 @@
+{
+  "runs": [
+    {
+      "run_id": "202606161956",
+      "folder": "artifacts/ingestions/machines/202606161956",
+      "n_rows": 115,
+      "n_columns": 9,
+      "unique_machines": 15,
+      "n_missing_total": 90,
+      "n_missing_per_column": {
+        "related_incident_id": 90
+      },
+      "reporting_period": "2025-06-15 → 2026-05-30"
+    }
+  ]
+}
