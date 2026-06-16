@@ -110,3 +110,9 @@ MAINTENANCE_COMPONENT_COLUMN: str = "component"
 MAINTENANCE_DURATION_COLUMN: str = "duration_hours"
 MAINTENANCE_INCIDENT_COLUMN: str = "related_incident_id"
 MACHINE_CRITICALITY_COLUMN: str = "criticality"
+
+# ─── Cross-source analyses ───────────────────────────────────────────────────
+# Analyses that combine several sources (joined on machine_id / incident_id).
+ANALYSES_ARTIFACTS_DIR: Path = PROJECT_ROOT / "artifacts" / "analyses"
+CROSS_SOURCE_ARTIFACTS_DIR: Path = ANALYSES_ARTIFACTS_DIR / "cross_source"
+CROSS_SOURCE_RUNS_REGISTRY_PATH: Path = CROSS_SOURCE_ARTIFACTS_DIR / "runs_registry.json"

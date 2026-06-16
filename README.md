@@ -103,6 +103,22 @@ component), a `run_report.md`, and updates the machines `runs_registry.json`.
 
 ---
 
+## 3d. Cross-source analysis
+
+Cross-source analyses combine the sources (joined on `machine_id` /
+`incident_id`). They live in `src/analyses/` and reuse the source loaders.
+
+```bash
+uv run python scripts/run_cross_source.py
+```
+
+Produces `artifacts/analyses/cross_source/AAAAMMJJHHMM/` with the joined
+`machine_profile.csv`, three cross plots (incidents vs maintenance, reactive vs
+severity, telemetry vs incidents), a `run_report.md`, and a dedicated registry.
+Interactive exploration: `notebooks/04_cross_source.ipynb`.
+
+---
+
 ## 4. Anonymisation — technical rationale
 
 The GDPR distinguishes **anonymisation** (irreversible) from **pseudonymisation**

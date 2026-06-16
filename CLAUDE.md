@@ -58,20 +58,26 @@ predictive_maintenance/
 │   ├── common/             ← code partagé, agnostique de la source
 │   │   ├── metrics.py      ← compute_quality_metrics
 │   │   └── registry.py     ← upsert_run (registre générique)
-│   └── sources/            ← une sous-package self-contained par source
-│       ├── incidents/      ← loader, anonymizer, pipeline, distributions,
-│       │                      histograms, correlations, runner
-│       ├── telemetry/      ← loader, boxplots, runner
-│       └── machines/       ← models (ORM), loader (SQL→SQLite), plots, runner
+│   ├── sources/            ← ingestion : une sous-package self-contained par source
+│   │   ├── incidents/      ← loader, anonymizer, pipeline, distributions,
+│   │   │                      histograms, correlations, runner
+│   │   ├── telemetry/      ← loader, boxplots, runner
+│   │   └── machines/       ← models (ORM), loader (SQL→SQLite), plots, runner
+│   └── analyses/           ← analyses qui CROISENT plusieurs sources
+│       ├── joins.py        ← tables jointes (réutilisent les loaders des sources)
+│       ├── plots.py
+│       └── runner.py
 ├── scripts/
 │   ├── run_incidents.py    ← CLI source incidents
 │   ├── run_telemetry.py    ← CLI source télémétrie
 │   ├── run_machines.py     ← CLI source machines/maintenance
+│   ├── run_cross_source.py ← CLI analyse inter-sources
 │   └── run_all.py          ← lance TOUTES les sources (src/pipeline.py)
-└── notebooks/              ← un notebook par source (non versionnés dans DVC)
+└── notebooks/              ← un notebook par source + un transverse (non DVC)
     ├── 01_incidents.ipynb
     ├── 02_telemetry.ipynb
-    └── 03_machines.ipynb
+    ├── 03_machines.ipynb
+    └── 04_cross_source.ipynb
 ```
 
 > **Principe d'organisation** : on organise **par source**. Chaque source est une
@@ -309,6 +315,35 @@ Artefacts dans `artifacts/ingestions/machines/AAAAMMJJHHMM/` :
 | `run_report.md` | Rapport (métriques + synthèse maintenance) |
 
 Registre dédié : `artifacts/ingestions/machines/runs_registry.json`.
+
+---
+
+## Analyses inter-sources
+
+Une **analyse inter-sources** combine plusieurs sources (elle n'ingère rien de
+nouveau). Elle vit dans **`src/analyses/`** (et non `src/sources/`), réutilise les
+**loaders des sources**, et joint sur **`machine_id`** (et `incident_id` pour le
+lien maintenance↔incident).
+
+```bash
+uv run python scripts/run_cross_source.py
+```
+
+Artefacts dans `artifacts/analyses/cross_source/AAAAMMJJHHMM/` :
+
+| Fichier | Description |
+|---|---|
+| `machine_profile.csv` | Table jointe : 1 ligne/machine (incidents + télémétrie + maintenance + criticité) |
+| `1_incidents_vs_maintenance.png` | Incidents vs maintenances par machine |
+| `2_reactive_vs_severity.png` | Maintenance reactive ↔ sévérité de l'incident |
+| `3_telemetry_vs_incidents.png` | Température moyenne vs incidents par machine |
+| `run_report.md` | Rapport (corrélations clés) |
+
+Registre dédié : `artifacts/analyses/cross_source/runs_registry.json`.
+Exploration interactive : `notebooks/04_cross_source.ipynb`.
+
+> Pour ajouter une analyse : un module de jointure/plots dans `src/analyses/`,
+> branché dans son `runner.py` ; même logique d'artefacts que les sources.
 
 ---
 
