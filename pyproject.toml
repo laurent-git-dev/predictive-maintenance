@@ -1,0 +1,34 @@
+[project]
+name = "predictive-maintenance"
+version = "0.1.0"
+description = "Maintenance prédictive industrielle — ingestion, anonymisation et EDA des relevés d'incidents."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dvc>=3.67.1",
+    "matplotlib>=3.11.0",
+    "pandas>=3.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "ruff>=0.15.17",
+]
+
+# Permet d'importer le package `src` depuis les scripts et notebooks.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F: pyflakes+pycodestyle, I: isort, UP: pyupgrade, B: bugbear
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]

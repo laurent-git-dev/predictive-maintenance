@@ -1,0 +1,37 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Secrets / configuration locale
+.env
+.env.*
+!.env.example
+
+# Données — NE JAMAIS committer de données brutes ou nominatives.
+# Elles sont versionnées via DVC (fichiers .dvc seuls dans Git).
+data/raw/*
+data/processed/*
+data/external/*
+!data/**/.gitkeep
+!data/**/*.dvc
+
+# Datasets anonymisés produits par les runs : versionnés via DVC.
+artifacts/ingestions/incidents/**/incidents_anonymized.csv
+
+# Clés de pseudonymisation (mapping hash -> identité réelle) : jamais dans le repo.
+*.mapping.json
+mappings/
+
+# Notebooks : sorties volumineuses
+.ipynb_checkpoints/
+
+# OS
+Thumbs.db
+.DS_Store
