@@ -1,7 +1,6 @@
 # Incident dataset — synthesis report
 
-> Run `202606161715` · shareable summary for business teams. The data is anonymised:
-> operators are pseudonymised and cannot be re-identified.
+> Run `202606162112` · shareable summary for business teams. The data is anonymised: operators are pseudonymised and cannot be re-identified.
 
 ## Dataset at a glance
 
@@ -15,11 +14,7 @@
 | Missing values (total) | 59 |
 | Mean confidence index | 0.113 |
 
-**How to read this report.** Each incident records the machine, the shift, the
-severity and the set of *signals* (anomaly types prefixed by `type_`) that fired.
-The **confidence index** of an incident is the share of signals active at once:
-an incident corroborated by several signals is considered more reliable than one
-relying on a single isolated signal.
+**How to read this report.** Each incident records the machine, the shift, the severity and the set of *signals* (anomaly types prefixed by `type_`) that fired. The **confidence index** of an incident is the share of signals active at once: an incident corroborated by several signals is considered more reliable than one relying on a single isolated signal.
 
 ## 1. Temporal distributions
 
@@ -51,14 +46,11 @@ relying on a single isolated signal.
 ### Correlation: severity / signals
 ![Correlation: severity / signals](3.1_corr_severity_signals.png)
 
-### Correlation: severity / comment presence
-![Correlation: severity / comment presence](3.2_corr_severity_comment.png)
+### Correlation: severity / comment category
+![Correlation: severity / comment category](3.2_corr_severity_comment.png)
 
 ## Notes for business teams
 
-- Machines and shifts concentrating the most incidents (sections 1 & 2) are
-  natural priorities for preventive maintenance.
-- The severity / signals correlation (3.1) highlights which signals tend to go
-  with more severe incidents.
-- Incidents with a low confidence index (single signal) may deserve a closer
-  manual review.
+- Machines and shifts concentrating the most incidents (sections 1 & 2) are natural priorities for preventive maintenance.
+- The severity / signals correlation (3.1) highlights which signals tend to go with more severe incidents.
+- Incidents with a low confidence index (single signal) may deserve a closer manual review.

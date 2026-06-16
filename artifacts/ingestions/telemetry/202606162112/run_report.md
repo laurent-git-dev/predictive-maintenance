@@ -1,8 +1,8 @@
-# Telemetry run report — 202606161815
+# Telemetry run report — 202606162112
 
-- **Source**: `data\raw\telemetry.csv`
-- **Run date**: 2026-06-16 18:15
-- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/ingestions/telemetry/202606161815`
+- **Source**: `Z:\formation_aelion\project\vs_code\data\raw\telemetry.csv`
+- **Run date**: 2026-06-16 21:12
+- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/ingestions/telemetry/202606162112`
 - **Reporting period**: 2025-06-01 00:00 → 2026-06-08 23:00
 
 ## Quality metrics

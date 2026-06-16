@@ -1,8 +1,8 @@
-# Machines / maintenance run report — 202606161956
+# Machines / maintenance run report — 202606162112
 
-- **Source**: `data\raw\machines.sql`
-- **Run date**: 2026-06-16 19:56
-- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/ingestions/machines/202606161956`
+- **Source**: `Z:\formation_aelion\project\vs_code\data\raw\machines.sql`
+- **Run date**: 2026-06-16 21:12
+- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/ingestions/machines/202606162112`
 - **Reporting period**: 2025-06-15 → 2026-05-30
 
 ## Quality metrics
