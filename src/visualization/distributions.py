@@ -5,9 +5,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")  # non-interactive backend: no window, write to file.
 import matplotlib.pyplot as plt
 
 from src import config

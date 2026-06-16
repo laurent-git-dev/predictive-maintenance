@@ -64,14 +64,16 @@ predictive_maintenance/
 │   ├── ingestion/
 │   │   ├── loader.py
 │   │   ├── anonymizer.py
-│   │   └── pipeline.py
+│   │   ├── pipeline.py
+│   │   └── runner.py       ← orchestration d'un run (réutilisée par CLI + notebooks)
 │   └── visualization/
 │       ├── distributions.py
 │       ├── histograms.py
 │       └── correlations.py
 ├── scripts/
-│   └── run_ingestion.py    ← point d'entrée CLI
+│   └── run_ingestion.py    ← point d'entrée CLI (wrapper de runner.py)
 └── notebooks/              ← exploration EDA (non versionnés dans DVC)
+    └── 01_exploration.ipynb
 ```
 
 ---
