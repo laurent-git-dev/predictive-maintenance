@@ -17,10 +17,10 @@ dev = [
     "ruff>=0.15.17",
 ]
 
-# Permet d'importer le package `src` depuis les scripts et notebooks.
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+[tool.uv]
+# This project is an application, not a library: do not build/install it as a
+# package. Modules under src/ are imported via sys.path (see scripts and notebook).
+package = false
 
 [tool.ruff]
 line-length = 100
