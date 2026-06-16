@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 
 from src.sources.incidents import runner as incidents_runner
+from src.sources.machines import runner as machines_runner
 from src.sources.telemetry import runner as telemetry_runner
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 SOURCES: dict = {
     incidents_runner.SOURCE_NAME: incidents_runner.run_default,
     telemetry_runner.SOURCE_NAME: telemetry_runner.run_default,
+    machines_runner.SOURCE_NAME: machines_runner.run_default,
 }
 
 

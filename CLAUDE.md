@@ -61,14 +61,17 @@ predictive_maintenance/
 │   └── sources/            ← une sous-package self-contained par source
 │       ├── incidents/      ← loader, anonymizer, pipeline, distributions,
 │       │                      histograms, correlations, runner
-│       └── telemetry/      ← loader, boxplots, runner
+│       ├── telemetry/      ← loader, boxplots, runner
+│       └── machines/       ← models (ORM), loader (SQL→SQLite), plots, runner
 ├── scripts/
 │   ├── run_incidents.py    ← CLI source incidents
 │   ├── run_telemetry.py    ← CLI source télémétrie
+│   ├── run_machines.py     ← CLI source machines/maintenance
 │   └── run_all.py          ← lance TOUTES les sources (src/pipeline.py)
 └── notebooks/              ← un notebook par source (non versionnés dans DVC)
     ├── 01_incidents.ipynb
-    └── 02_telemetry.ipynb
+    ├── 02_telemetry.ipynb
+    └── 03_machines.ipynb
 ```
 
 > **Principe d'organisation** : on organise **par source**. Chaque source est une
@@ -273,6 +276,39 @@ Artefacts produits dans `artifacts/ingestions/telemetry/AAAAMMJJHHMM/` :
 | `run_report.md` | Rapport (métriques + stats des paramètres) |
 
 Registre dédié : `artifacts/ingestions/telemetry/runs_registry.json`.
+
+---
+
+## Source 3 — Machines / maintenance (SQL)
+
+Troisième source : **dump PostgreSQL** (`data/raw/machines.sql`) avec deux tables :
+- **`machine`** — référentiel (modèle, ligne, atelier, criticité, capacités, date
+  de mise en service) ;
+- **`maintenance`** — événements (`machine_code`, `maintenance_at`, `maintenance_type`
+  *proactive/reactive*, `action_type`, `component`, `description`,
+  `related_incident_id`, `duration_hours`).
+
+**Accès** : le dump est chargé dans une base **SQLite locale** via **SQLAlchemy ORM**
+(modèles `Machine` / `Maintenance` dans `src/sources/machines/models.py` = schéma
+documenté), puis lu en DataFrames avec `pandas.read_sql`. La syntaxe PostgreSQL
+non portable (`NOW()`, `ON CONFLICT`) est neutralisée au chargement. À la lecture,
+`machine_code` est renommé `machine_id` (cohérence inter-sources / jointures).
+
+```bash
+uv run python scripts/run_machines.py --input data/raw/machines.sql
+```
+
+Artefacts dans `artifacts/ingestions/machines/AAAAMMJJHHMM/` :
+
+| Fichier | Description |
+|---|---|
+| `1.1_hist_maintenance_machine.png` | Nombre de maintenances par machine |
+| `1.2_box_duration_machine.png` | Durée de maintenance par machine (boxplot) |
+| `1.3_maintenance_type_split.png` | Proactive vs reactive par machine |
+| `1.4_hist_maintenance_component.png` | Maintenances par composant |
+| `run_report.md` | Rapport (métriques + synthèse maintenance) |
+
+Registre dédié : `artifacts/ingestions/machines/runs_registry.json`.
 
 ---
 

@@ -94,3 +94,19 @@ TELEMETRY_EXPECTED_COLUMNS: tuple[str, ...] = (
     TELEMETRY_TIMESTAMP_COLUMN,
     *TELEMETRY_PARAM_COLUMNS,
 )
+
+# ─── Machines / maintenance source ───────────────────────────────────────────
+# Third data source: PostgreSQL dump (machine referential + maintenance events),
+# loaded into a local SQLite database via SQLAlchemy ORM.
+MACHINES_ARTIFACTS_DIR: Path = PROJECT_ROOT / "artifacts" / "ingestions" / "machines"
+DEFAULT_MACHINES_SQL: Path = DATA_RAW_DIR / "machines.sql"
+MACHINES_RUNS_REGISTRY_PATH: Path = MACHINES_ARTIFACTS_DIR / "runs_registry.json"
+
+# Source key in the SQL is ``machine_code``; renamed to MACHINE_COLUMN on load
+# for consistency with the other sources (and future cross-source joins).
+MAINTENANCE_TIMESTAMP_COLUMN: str = "maintenance_at"
+MAINTENANCE_TYPE_COLUMN: str = "maintenance_type"
+MAINTENANCE_COMPONENT_COLUMN: str = "component"
+MAINTENANCE_DURATION_COLUMN: str = "duration_hours"
+MAINTENANCE_INCIDENT_COLUMN: str = "related_incident_id"
+MACHINE_CRITICALITY_COLUMN: str = "criticality"

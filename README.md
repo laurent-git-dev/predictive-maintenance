@@ -86,6 +86,23 @@ parameter (distribution per machine, `1.1_box_*.png` … `1.5_box_*.png`), a
 
 ---
 
+## 3c. Machines / maintenance source (SQL)
+
+A third source: a **PostgreSQL dump** (`data/raw/machines.sql`) with a `machine`
+referential and a `maintenance` events table. It is loaded into a local **SQLite**
+database via **SQLAlchemy ORM** (no PostgreSQL server needed), then read into
+pandas.
+
+```bash
+uv run python scripts/run_machines.py --input data/raw/machines.sql
+```
+
+Produces `artifacts/ingestions/machines/AAAAMMJJHHMM/` with four plots
+(maintenance per machine, duration per machine, proactive vs reactive, per
+component), a `run_report.md`, and updates the machines `runs_registry.json`.
+
+---
+
 ## 4. Anonymisation — technical rationale
 
 The GDPR distinguishes **anonymisation** (irreversible) from **pseudonymisation**
