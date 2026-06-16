@@ -1,4 +1,4 @@
-"""Histograms per signal and per machine, with the reporting confidence index."""
+"""Histograms of incident counts: by machine, operator, signal and confidence."""
 
 from __future__ import annotations
 
@@ -12,66 +12,90 @@ from src import config
 logger = logging.getLogger(__name__)
 
 
-def plot_signals_by_machine(df, output_dir: Path) -> Path:
-    """Produce a combined signal / machine / confidence-index figure.
+def plot_incidents_per_machine(df, output_dir: Path) -> Path:
+    """Number of incidents per machine (bar chart)."""
+    out = Path(output_dir) / "2.1_hist_incidents_machine.png"
+    counts = df[config.MACHINE_COLUMN].value_counts().sort_values(ascending=False)
 
-    The figure has three panels:
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.bar(counts.index.astype(str), counts.values, color="#4C72B0")
+    ax.set_title("Number of incidents per machine")
+    ax.set_xlabel("Machine")
+    ax.set_ylabel("Number of incidents")
+    ax.tick_params(axis="x", rotation=90)
+    ax.grid(True, axis="y", alpha=0.3)
+    _save(fig, out)
+    return out
 
-    1. Total frequency of each signal.
-    2. Heatmap (machine x signal) of the number of activations.
-    3. Distribution of the reporting confidence index.
-    """
-    out = Path(output_dir) / "hist_signals_machine.png"
+
+def plot_incidents_per_operator(df, output_dir: Path) -> Path:
+    """Number of incidents per operator (pseudonymised id, bar chart)."""
+    out = Path(output_dir) / "2.2_hist_incidents_operator.png"
+    counts = df["operator_name"].value_counts().sort_values(ascending=False)
+    labels = [str(op)[:8] for op in counts.index]  # short pseudonym
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.bar(labels, counts.values, color="#55A868")
+    ax.set_title("Number of incidents per operator (pseudonymised)")
+    ax.set_xlabel("Operator (pseudonymised)")
+    ax.set_ylabel("Number of incidents")
+    ax.tick_params(axis="x", rotation=90)
+    ax.grid(True, axis="y", alpha=0.3)
+    _save(fig, out)
+    return out
+
+
+def plot_incidents_per_signal(df, output_dir: Path) -> Path:
+    """Number of incidents per signal (the ``type_`` columns, bar chart)."""
+    out = Path(output_dir) / "2.3_hist_incidents_signal.png"
+    present_signals = [c for c in config.SIGNAL_COLUMNS if c in df.columns]
+    counts = df[present_signals].fillna(0).astype(int).sum().sort_values(ascending=False)
+    labels = [s.replace("type_", "") for s in counts.index]
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.bar(labels, counts.values, color="#C44E52")
+    ax.set_title("Number of incidents per signal")
+    ax.set_xlabel("Signal")
+    ax.set_ylabel("Number of incidents")
+    ax.tick_params(axis="x", rotation=90)
+    ax.grid(True, axis="y", alpha=0.3)
+    _save(fig, out)
+    return out
+
+
+def plot_incidents_per_confidence(df, output_dir: Path) -> Path:
+    """Distribution of incidents by reporting confidence index (histogram)."""
+    out = Path(output_dir) / "2.4_hist_incidents_confidence.png"
     present_signals = [c for c in config.SIGNAL_COLUMNS if c in df.columns]
 
-    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
-
-    # ── Panel 1: frequency per signal ────────────────────────────────────────
-    totals = df[present_signals].fillna(0).astype(int).sum().sort_values()
-    axes[0].barh(
-        [s.replace("type_", "") for s in totals.index],
-        totals.values,
-        color="#4C72B0",
-    )
-    axes[0].set_title("Frequency per signal")
-    axes[0].set_xlabel("Number of activations")
-    axes[0].grid(True, axis="x", alpha=0.3)
-
-    # ── Panel 2: machine x signal heatmap ────────────────────────────────────
-    if config.MACHINE_COLUMN in df.columns:
-        pivot = (
-            df.assign(**{c: df[c].fillna(0).astype(int) for c in present_signals})
-            .groupby(config.MACHINE_COLUMN)[present_signals]
-            .sum()
-        )
-        im = axes[1].imshow(pivot.values, aspect="auto", cmap="YlOrRd")
-        axes[1].set_xticks(range(len(present_signals)))
-        axes[1].set_xticklabels([s.replace("type_", "") for s in present_signals], rotation=90)
-        axes[1].set_yticks(range(len(pivot.index)))
-        axes[1].set_yticklabels(pivot.index.astype(str))
-        axes[1].set_title("Activations per machine and signal")
-        fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
-    else:
-        axes[1].set_visible(False)
-
-    # ── Panel 3: confidence index ────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(10, 5))
     if config.CONFIDENCE_COLUMN in df.columns:
-        axes[2].hist(
+        ax.hist(
             df[config.CONFIDENCE_COLUMN].dropna(),
             bins=len(present_signals) + 1,
-            color="#55A868",
+            color="#8172B3",
             edgecolor="white",
         )
-        axes[2].set_title("Reporting confidence index")
-        axes[2].set_xlabel("Index (active signals / total)")
-        axes[2].set_ylabel("Number of incidents")
-        axes[2].grid(True, axis="y", alpha=0.3)
-    else:
-        axes[2].set_visible(False)
+    ax.set_title("Number of incidents by confidence index")
+    ax.set_xlabel("Confidence index (active signals / total)")
+    ax.set_ylabel("Number of incidents")
+    ax.grid(True, axis="y", alpha=0.3)
+    _save(fig, out)
+    return out
 
-    fig.suptitle("Signal analysis per machine", fontsize=14)
+
+def plot_all(df, output_dir: Path) -> list[Path]:
+    """Produce the four incident histograms and return their paths."""
+    return [
+        plot_incidents_per_machine(df, output_dir),
+        plot_incidents_per_operator(df, output_dir),
+        plot_incidents_per_signal(df, output_dir),
+        plot_incidents_per_confidence(df, output_dir),
+    ]
+
+
+def _save(fig, out: Path) -> None:
     fig.tight_layout()
     fig.savefig(out, dpi=120)
     plt.close(fig)
     logger.info("Plot saved: %s", out.name)
-    return out

@@ -37,15 +37,30 @@ def load_dotenv(path: Path) -> None:
 
 
 def generate_plots(result: PipelineResult, run_dir: Path) -> list[Path]:
-    """Generate all EDA plots in the run folder."""
-    paths = distributions.plot_all(result.data, run_dir)
-    paths.append(histograms.plot_signals_by_machine(result.data, run_dir))
-    paths.append(correlations.plot_correlation_matrix(result.data, run_dir))
+    """Generate all EDA plots, in order (distributions, histograms, correlations)."""
+    paths: list[Path] = []
+    paths += distributions.plot_all(result.data, run_dir)  # 1.x
+    paths += histograms.plot_all(result.data, run_dir)  # 2.x
+    paths += correlations.plot_all(result.data, run_dir)  # 3.x
     return paths
 
 
+# Ordered list of produced graphs: (filename, human-readable caption).
+GRAPH_CATALOG: list[tuple[str, str]] = [
+    ("1.1_dist_incidents_day.png", "Incident distribution per day"),
+    ("1.2_dist_incidents_week.png", "Incident distribution per week"),
+    ("1.3_dist_incidents_shift.png", "Incident distribution per shift"),
+    ("2.1_hist_incidents_machine.png", "Incidents per machine"),
+    ("2.2_hist_incidents_operator.png", "Incidents per operator (pseudonymised)"),
+    ("2.3_hist_incidents_signal.png", "Incidents per signal"),
+    ("2.4_hist_incidents_confidence.png", "Incidents per confidence index"),
+    ("3.1_corr_severity_signals.png", "Correlation: severity / signals"),
+    ("3.2_corr_severity_comment.png", "Correlation: severity / comment presence"),
+]
+
+
 def write_run_report(result: PipelineResult, run_dir: Path, run_id: str, input_path) -> Path:
-    """Write the run's markdown report."""
+    """Write the run's technical markdown report."""
     out = run_dir / "run_report.md"
     m = result.metrics_source
     missing_lines = (
@@ -56,6 +71,7 @@ def write_run_report(result: PipelineResult, run_dir: Path, run_id: str, input_p
         f"- `{col}` → {result.anonymization_report['method'][col]}"
         for col in result.anonymization_report["processed_columns"]
     )
+    artifact_lines = "\n".join(f"- `{name}`" for name, _ in GRAPH_CATALOG)
 
     content = f"""# Run report — {run_id}
 
@@ -96,14 +112,81 @@ def write_run_report(result: PipelineResult, run_dir: Path, run_id: str, input_p
 ## Produced artifacts
 
 - `incidents_anonymized.csv`
-- `dist_incidents_day.png`
-- `dist_incidents_week.png`
-- `dist_incidents_shift.png`
-- `hist_signals_machine.png`
-- `corr_incidents_signals.png`
+{artifact_lines}
+- `dataset_report.md`
 """
     out.write_text(content, encoding="utf-8")
     logger.info("Report written: %s", out.name)
+    return out
+
+
+def write_dataset_report(result: PipelineResult, run_dir: Path, run_id: str) -> Path:
+    """Write a shareable, business-friendly synthesis report compiling all graphs."""
+    out = run_dir / "dataset_report.md"
+    df = result.data
+    m = result.metrics_source
+
+    # Reporting period.
+    period = "n/a"
+    if config.DATETIME_COLUMN in df.columns or config.DATE_COLUMN in df.columns:
+        dates = df[config.DATE_COLUMN].dropna()
+        if not dates.empty:
+            period = f"{dates.min():%Y-%m-%d} → {dates.max():%Y-%m-%d}"
+
+    n_operators = int(df["operator_name"].nunique()) if "operator_name" in df.columns else 0
+    n_signals = len([c for c in config.SIGNAL_COLUMNS if c in df.columns])
+    conf = result.confidence_summary
+
+    sections = {
+        "1. Temporal distributions": GRAPH_CATALOG[0:3],
+        "2. Incident histograms": GRAPH_CATALOG[3:7],
+        "3. Correlations": GRAPH_CATALOG[7:9],
+    }
+    blocks = []
+    for title, items in sections.items():
+        lines = [f"## {title}", ""]
+        for name, caption in items:
+            lines.append(f"### {caption}")
+            lines.append(f"![{caption}]({name})")
+            lines.append("")
+        blocks.append("\n".join(lines))
+    graphs_md = "\n".join(blocks)
+
+    content = f"""# Incident dataset — synthesis report
+
+> Run `{run_id}` · shareable summary for business teams. The data is anonymised:
+> operators are pseudonymised and cannot be re-identified.
+
+## Dataset at a glance
+
+| Indicator | Value |
+|---|---|
+| Reporting period | {period} |
+| Number of incidents | {m['n_rows']} |
+| Unique machines | {m['unique_machines']} |
+| Unique operators (pseudonymised) | {n_operators} |
+| Signals tracked | {n_signals} |
+| Missing values (total) | {m['n_missing_total']} |
+| Mean confidence index | {conf.get('mean', 'n/a')} |
+
+**How to read this report.** Each incident records the machine, the shift, the
+severity and the set of *signals* (anomaly types prefixed by `type_`) that fired.
+The **confidence index** of an incident is the share of signals active at once:
+an incident corroborated by several signals is considered more reliable than one
+relying on a single isolated signal.
+
+{graphs_md}
+## Notes for business teams
+
+- Machines and shifts concentrating the most incidents (sections 1 & 2) are
+  natural priorities for preventive maintenance.
+- The severity / signals correlation (3.1) highlights which signals tend to go
+  with more severe incidents.
+- Incidents with a low confidence index (single signal) may deserve a closer
+  manual review.
+"""
+    out.write_text(content, encoding="utf-8")
+    logger.info("Dataset report written: %s", out.name)
     return out
 
 
@@ -143,16 +226,7 @@ def execute_run(
     """Run the full pipeline and persist every artifact; return the run folder.
 
     Steps: timestamped folder → pipeline → anonymised CSV → EDA plots →
-    ``run_report.md`` → ``runs_registry.json`` update.
-
-    Parameters
-    ----------
-    input_path : str | pathlib.Path
-        Path to the source CSV.
-    salt : str
-        Secret anonymisation salt.
-    pseudonym_length : int, optional
-        Length of the ``operator_name`` pseudonym.
+    ``run_report.md`` → ``dataset_report.md`` → ``runs_registry.json`` update.
     """
     run_id = datetime.now().strftime("%Y%m%d%H%M")
     run_dir = config.ARTIFACTS_DIR / run_id
@@ -167,6 +241,7 @@ def execute_run(
 
     generate_plots(result, run_dir)
     write_run_report(result, run_dir, run_id, input_path)
+    write_dataset_report(result, run_dir, run_id)
     update_registry(result, run_id, run_dir)
 
     logger.info("Run %s completed successfully.", run_id)

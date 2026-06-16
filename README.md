@@ -47,14 +47,22 @@ The script creates `artifacts/ingestions/incidents/AAAAMMJJHHMM/` with:
 | File | Description |
 |---|---|
 | `incidents_anonymized.csv` | Cleaned, anonymised, enriched dataset (confidence index) |
-| `dist_incidents_day.png` | Incident distribution per day |
-| `dist_incidents_week.png` | Distribution per week |
-| `dist_incidents_shift.png` | Distribution per shift |
-| `hist_signals_machine.png` | Signal/machine histograms + confidence index |
-| `corr_incidents_signals.png` | Correlation matrix |
-| `run_report.md` | Run report (metrics, anonymisation, confidence) |
+| `1.1_dist_incidents_day.png` | Incident distribution per day |
+| `1.2_dist_incidents_week.png` | Incident distribution per week |
+| `1.3_dist_incidents_shift.png` | Incident distribution per shift |
+| `2.1_hist_incidents_machine.png` | Incidents per machine |
+| `2.2_hist_incidents_operator.png` | Incidents per operator (pseudonymised) |
+| `2.3_hist_incidents_signal.png` | Incidents per signal |
+| `2.4_hist_incidents_confidence.png` | Incidents per confidence index |
+| `3.1_corr_severity_signals.png` | Correlation: severity / signals |
+| `3.2_corr_severity_comment.png` | Correlation: severity / comment presence |
+| `run_report.md` | Technical run report (metrics, anonymisation, confidence) |
+| `dataset_report.md` | Shareable synthesis report (business) compiling all graphs |
 
-And updates `artifacts/ingestions/incidents/runs_registry.json`.
+Graphs are named with an ordered numeric prefix. And the run updates
+`artifacts/ingestions/incidents/runs_registry.json`.
+
+> **Signals** are the columns prefixed by `type_` (binary 0/1 anomaly flags).
 
 ---
 

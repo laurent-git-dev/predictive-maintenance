@@ -183,6 +183,13 @@ Fichier : `data/raw/incidents.csv`
 | `type_arret_urgence` | bool/int | Signal arrêt d'urgence |
 | `type_defaut_qualite` | bool/int | Signal défaut qualité |
 
+**Définition — signaux** :
+Les **signaux** désignent l'ensemble des colonnes **préfixées par `type_`**
+(`type_surchauffe`, `type_baisse_pression`, …). Chaque signal est une valeur
+binaire (0/1) indiquant si ce type d'anomalie a été relevé pour l'incident.
+Cette définition fait foi dans tout le code (`SIGNAL_COLUMNS` dans `src/config.py`)
+et dans les analyses.
+
 **Colonnes PII (données personnelles identifiables)** :
 - `operator_name` → remplacé par un hash SHA-256 tronqué (pseudonymisation)
 - `operator_badge` → remplacé par un identifiant opaque `OP_XXXX`
@@ -202,14 +209,21 @@ Fichier : `data/raw/incidents.csv`
 
 À chaque run d'ingestion, les fichiers suivants doivent être produits :
 
+Les graphes sont nommés avec un **préfixe numéroté** pour rester dans l'ordre.
+
 | Fichier | Description |
 |---|---|
 | `incidents_anonymized.csv` | Dataset nettoyé et anonymisé |
-| `dist_incidents_day.png` | Distribution des incidents par jour |
-| `dist_incidents_week.png` | Distribution par semaine |
-| `dist_incidents_shift.png` | Distribution par shift |
-| `hist_signals_machine.png` | Histogrammes par signal et par machine |
-| `corr_incidents_signals.png` | Matrice de corrélation |
-| `run_report.md` | Rapport du run (métriques, observations) |
+| `1.1_dist_incidents_day.png` | Distribution des incidents par jour |
+| `1.2_dist_incidents_week.png` | Distribution par semaine |
+| `1.3_dist_incidents_shift.png` | Distribution par shift |
+| `2.1_hist_incidents_machine.png` | Histogramme des incidents par machine |
+| `2.2_hist_incidents_operator.png` | Histogramme des incidents par opérateur |
+| `2.3_hist_incidents_signal.png` | Histogramme des incidents par signal |
+| `2.4_hist_incidents_confidence.png` | Histogramme par indice de confiance |
+| `3.1_corr_severity_signals.png` | Corrélation sévérité / signaux |
+| `3.2_corr_severity_comment.png` | Corrélation sévérité / présence de commentaire |
+| `run_report.md` | Rapport technique du run (métriques) |
+| `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
 
 Le registre `runs_registry.json` est mis à jour automatiquement.

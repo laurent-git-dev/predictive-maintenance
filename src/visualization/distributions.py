@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def plot_incidents_per_day(df, output_dir: Path) -> Path:
     """Plot the number of incidents per day and save it as PNG."""
-    out = Path(output_dir) / "dist_incidents_day.png"
+    out = Path(output_dir) / "1.1_dist_incidents_day.png"
     series = df.dropna(subset=[config.DATE_COLUMN]).groupby(config.DATE_COLUMN).size()
 
     fig, ax = plt.subplots(figsize=(12, 5))
@@ -30,7 +30,7 @@ def plot_incidents_per_day(df, output_dir: Path) -> Path:
 
 def plot_incidents_per_week(df, output_dir: Path) -> Path:
     """Plot the number of incidents per week (weekly resampling)."""
-    out = Path(output_dir) / "dist_incidents_week.png"
+    out = Path(output_dir) / "1.2_dist_incidents_week.png"
     series = (
         df.dropna(subset=[config.DATE_COLUMN]).set_index(config.DATE_COLUMN).resample("W").size()
     )
@@ -48,7 +48,7 @@ def plot_incidents_per_week(df, output_dir: Path) -> Path:
 
 def plot_incidents_per_shift(df, output_dir: Path) -> Path:
     """Plot the number of incidents per shift (morning / afternoon / night)."""
-    out = Path(output_dir) / "dist_incidents_shift.png"
+    out = Path(output_dir) / "1.3_dist_incidents_shift.png"
     counts = df[config.SHIFT_COLUMN].value_counts()
 
     fig, ax = plt.subplots(figsize=(8, 5))
