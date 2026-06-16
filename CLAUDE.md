@@ -279,7 +279,8 @@ Artefacts produits dans `artifacts/ingestions/telemetry/AAAAMMJJHHMM/` :
 | `1.3_box_voltage_mean_v.png` | Boxplot tension par machine |
 | `1.4_box_rotation_mean_rpm.png` | Boxplot rotation par machine |
 | `1.5_box_pieces_produced.png` | Boxplot pièces produites par machine |
-| `run_report.md` | Rapport (métriques + stats des paramètres) |
+| `run_report.md` | Rapport technique (métriques + stats des paramètres) |
+| `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
 
 Registre dédié : `artifacts/ingestions/telemetry/runs_registry.json`.
 
@@ -312,7 +313,8 @@ Artefacts dans `artifacts/ingestions/machines/AAAAMMJJHHMM/` :
 | `1.2_box_duration_machine.png` | Durée de maintenance par machine (boxplot) |
 | `1.3_maintenance_type_split.png` | Proactive vs reactive par machine |
 | `1.4_hist_maintenance_component.png` | Maintenances par composant |
-| `run_report.md` | Rapport (métriques + synthèse maintenance) |
+| `run_report.md` | Rapport technique (métriques + synthèse maintenance) |
+| `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
 
 Registre dédié : `artifacts/ingestions/machines/runs_registry.json`.
 
@@ -337,7 +339,8 @@ Artefacts dans `artifacts/analyses/cross_source/AAAAMMJJHHMM/` :
 | `1_incidents_vs_maintenance.png` | Incidents vs maintenances par machine |
 | `2_reactive_vs_severity.png` | Maintenance reactive ↔ sévérité de l'incident |
 | `3_telemetry_vs_incidents.png` | Température moyenne vs incidents par machine |
-| `run_report.md` | Rapport (corrélations clés) |
+| `run_report.md` | Rapport technique (corrélations clés) |
+| `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
 
 Registre dédié : `artifacts/analyses/cross_source/runs_registry.json`.
 Exploration interactive : `notebooks/04_cross_source.ipynb`.
@@ -363,9 +366,13 @@ Checklist pour une source `<nom>` :
    - `loader.py` : `load_<nom>()` (lecture, validation de schéma, typage) ;
    - éventuelles transformations spécifiques (ex. `anonymizer.py` si PII) ;
    - module(s) de graphes (PNG préfixés numérotés pour rester ordonnés) ;
-   - `runner.py` : `execute_run()`, `write_run_report()`, `update_registry()`
+   - `runner.py` : `execute_run()`, `write_run_report()` (technique),
+     `write_dataset_report()` (**obligatoire** — synthèse partageable, via
+     `src.common.reporting.write_dataset_report`), `update_registry()`
      (via `src.common.registry.upsert_run`), `run_default()` + `SOURCE_NAME`.
    - réutiliser `src.common.metrics.compute_quality_metrics`.
+   - **Tout run doit produire `run_report.md` ET `dataset_report.md`** (idem pour
+     les analyses inter-sources).
 3. **Enregistrer** le runner dans `SOURCES` de `src/pipeline.py`.
 4. **`scripts/run_<nom>.py`** : wrapper CLI (fixe le backend `Agg`).
 5. **`notebooks/0N_<nom>.ipynb`** : même logique (Section A = graphes via `src/`,

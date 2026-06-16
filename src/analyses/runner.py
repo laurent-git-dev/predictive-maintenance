@@ -19,6 +19,7 @@ from src.analyses.joins import (
     load_sources,
 )
 from src.common.registry import upsert_run
+from src.common.reporting import write_dataset_report as write_shared_report
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,42 @@ def update_registry(profile, reactive_join, run_id: str, run_dir: Path) -> None:
     upsert_run(config.CROSS_SOURCE_RUNS_REGISTRY_PATH, entry)
 
 
+def write_dataset_report(profile, reactive_join, run_dir: Path, run_id: str) -> Path:
+    """Write the shareable, business-friendly cross-source synthesis report."""
+    indicators = {
+        "Machines profiled": len(profile),
+        "Reactive maintenances linked to an incident": len(reactive_join),
+        "Sources joined": "incidents · telemetry · machines",
+    }
+    for col, label in [
+        ("mean_temperature_c", "Corr. mean temperature ↔ incidents"),
+        ("n_maintenance", "Corr. maintenance count ↔ incidents"),
+    ]:
+        if col in profile.columns:
+            indicators[label] = round(float(profile[[col, "n_incidents"]].corr().iloc[0, 1]), 2)
+
+    return write_shared_report(
+        run_dir,
+        title="Cross-source synthesis report",
+        subtitle=f"Run `{run_id}` · cross-source summary for business teams.",
+        indicators=indicators,
+        intro=(
+            "**How to read this report.** The sources are joined per machine (and per "
+            "incident for the maintenance link). These views relate incidents, telemetry "
+            "and maintenance to surface which machines and conditions drive failures."
+        ),
+        sections={"Cross-source relationships": GRAPH_CATALOG},
+        notes=[
+            "Machines high on both incidents and maintenance are the clearest preventive "
+            "targets.",
+            "A positive temperature ↔ incidents correlation would support temperature-based "
+            "early-warning thresholds.",
+            "Reactive maintenances are all linked to an incident — a basis for a future "
+            "predictive model.",
+        ],
+    )
+
+
 def execute_run() -> Path:
     """Build the cross-source analyses and persist artifacts; return the run folder."""
     run_id = datetime.now().strftime("%Y%m%d%H%M")
@@ -96,6 +133,7 @@ def execute_run() -> Path:
     profile.to_csv(run_dir / "machine_profile.csv", index=False, encoding=config.CSV_ENCODING)
     plots.plot_all(profile, reactive_join, run_dir)
     write_run_report(profile, reactive_join, run_dir, run_id)
+    write_dataset_report(profile, reactive_join, run_dir, run_id)
     update_registry(profile, reactive_join, run_id, run_dir)
 
     logger.info("Cross-source run %s completed successfully.", run_id)

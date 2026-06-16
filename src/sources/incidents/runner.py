@@ -18,6 +18,7 @@ from pathlib import Path
 
 from src import config
 from src.common.registry import upsert_run
+from src.common.reporting import write_dataset_report as write_shared_report
 from src.sources.incidents import correlations, distributions, histograms
 from src.sources.incidents.pipeline import PipelineResult, run_pipeline
 
@@ -124,72 +125,55 @@ def write_run_report(result: PipelineResult, run_dir: Path, run_id: str, input_p
 
 def write_dataset_report(result: PipelineResult, run_dir: Path, run_id: str) -> Path:
     """Write a shareable, business-friendly synthesis report compiling all graphs."""
-    out = run_dir / "dataset_report.md"
     df = result.data
     m = result.metrics_source
 
-    # Reporting period.
     period = "n/a"
-    if config.DATETIME_COLUMN in df.columns or config.DATE_COLUMN in df.columns:
+    if config.DATE_COLUMN in df.columns:
         dates = df[config.DATE_COLUMN].dropna()
         if not dates.empty:
             period = f"{dates.min():%Y-%m-%d} → {dates.max():%Y-%m-%d}"
-
     n_operators = int(df["operator_name"].nunique()) if "operator_name" in df.columns else 0
     n_signals = len([c for c in config.SIGNAL_COLUMNS if c in df.columns])
     conf = result.confidence_summary
 
-    sections = {
-        "1. Temporal distributions": GRAPH_CATALOG[0:3],
-        "2. Incident histograms": GRAPH_CATALOG[3:7],
-        "3. Correlations": GRAPH_CATALOG[7:9],
-    }
-    blocks = []
-    for title, items in sections.items():
-        lines = [f"## {title}", ""]
-        for name, caption in items:
-            lines.append(f"### {caption}")
-            lines.append(f"![{caption}]({name})")
-            lines.append("")
-        blocks.append("\n".join(lines))
-    graphs_md = "\n".join(blocks)
-
-    content = f"""# Incident dataset — synthesis report
-
-> Run `{run_id}` · shareable summary for business teams. The data is anonymised:
-> operators are pseudonymised and cannot be re-identified.
-
-## Dataset at a glance
-
-| Indicator | Value |
-|---|---|
-| Reporting period | {period} |
-| Number of incidents | {m['n_rows']} |
-| Unique machines | {m['unique_machines']} |
-| Unique operators (pseudonymised) | {n_operators} |
-| Signals tracked | {n_signals} |
-| Missing values (total) | {m['n_missing_total']} |
-| Mean confidence index | {conf.get('mean', 'n/a')} |
-
-**How to read this report.** Each incident records the machine, the shift, the
-severity and the set of *signals* (anomaly types prefixed by `type_`) that fired.
-The **confidence index** of an incident is the share of signals active at once:
-an incident corroborated by several signals is considered more reliable than one
-relying on a single isolated signal.
-
-{graphs_md}
-## Notes for business teams
-
-- Machines and shifts concentrating the most incidents (sections 1 & 2) are
-  natural priorities for preventive maintenance.
-- The severity / signals correlation (3.1) highlights which signals tend to go
-  with more severe incidents.
-- Incidents with a low confidence index (single signal) may deserve a closer
-  manual review.
-"""
-    out.write_text(content, encoding="utf-8")
-    logger.info("Dataset report written: %s", out.name)
-    return out
+    return write_shared_report(
+        run_dir,
+        title="Incident dataset — synthesis report",
+        subtitle=(
+            f"Run `{run_id}` · shareable summary for business teams. The data is "
+            "anonymised: operators are pseudonymised and cannot be re-identified."
+        ),
+        indicators={
+            "Reporting period": period,
+            "Number of incidents": m["n_rows"],
+            "Unique machines": m["unique_machines"],
+            "Unique operators (pseudonymised)": n_operators,
+            "Signals tracked": n_signals,
+            "Missing values (total)": m["n_missing_total"],
+            "Mean confidence index": conf.get("mean", "n/a"),
+        },
+        intro=(
+            "**How to read this report.** Each incident records the machine, the shift, "
+            "the severity and the set of *signals* (anomaly types prefixed by `type_`) "
+            "that fired. The **confidence index** of an incident is the share of signals "
+            "active at once: an incident corroborated by several signals is considered "
+            "more reliable than one relying on a single isolated signal."
+        ),
+        sections={
+            "1. Temporal distributions": GRAPH_CATALOG[0:3],
+            "2. Incident histograms": GRAPH_CATALOG[3:7],
+            "3. Correlations": GRAPH_CATALOG[7:9],
+        },
+        notes=[
+            "Machines and shifts concentrating the most incidents (sections 1 & 2) are "
+            "natural priorities for preventive maintenance.",
+            "The severity / signals correlation (3.1) highlights which signals tend to go "
+            "with more severe incidents.",
+            "Incidents with a low confidence index (single signal) may deserve a closer "
+            "manual review.",
+        ],
+    )
 
 
 def update_registry(result: PipelineResult, run_id: str, run_dir: Path) -> None:

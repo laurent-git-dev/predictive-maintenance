@@ -16,6 +16,7 @@ import pandas as pd
 from src import config
 from src.common.metrics import compute_quality_metrics
 from src.common.registry import upsert_run
+from src.common.reporting import write_dataset_report as write_shared_report
 from src.sources.machines import plots
 from src.sources.machines.loader import build_engine, load_maintenance
 
@@ -103,6 +104,38 @@ def update_registry(metrics: dict, run_id: str, run_dir: Path, period: str) -> N
     upsert_run(config.MACHINES_RUNS_REGISTRY_PATH, entry)
 
 
+def write_dataset_report(df, metrics: dict, run_dir: Path, run_id: str) -> Path:
+    """Write the shareable, business-friendly synthesis report for maintenance."""
+    type_counts = df[config.MAINTENANCE_TYPE_COLUMN].value_counts().to_dict()
+    return write_shared_report(
+        run_dir,
+        title="Machines / maintenance — synthesis report",
+        subtitle=f"Run `{run_id}` · shareable summary for business teams.",
+        indicators={
+            "Reporting period": _reporting_period(df),
+            "Maintenance events": metrics["n_rows"],
+            "Unique machines": metrics["unique_machines"],
+            "Proactive": type_counts.get("proactive", 0),
+            "Reactive": type_counts.get("reactive", 0),
+            "Mean duration (hours)": round(float(df[config.MAINTENANCE_DURATION_COLUMN].mean()), 2),
+            "Distinct components": int(df[config.MAINTENANCE_COMPONENT_COLUMN].nunique()),
+            "Linked to an incident": int(df[config.MAINTENANCE_INCIDENT_COLUMN].notna().sum()),
+        },
+        intro=(
+            "**How to read this report.** Each row is a maintenance event on a machine, "
+            "either *proactive* (scheduled) or *reactive* (after an incident). The graphs "
+            "show where maintenance effort concentrates — by machine, duration, type and "
+            "component."
+        ),
+        sections={"1. Maintenance overview": GRAPH_CATALOG},
+        notes=[
+            "Machines with many reactive maintenances are candidates for reinforced "
+            "preventive plans.",
+            "Components appearing most often (1.4) drive spare-parts and inspection " "priorities.",
+        ],
+    )
+
+
 def execute_run(input_path) -> Path:
     """Run the machines pipeline and persist artifacts; return the run folder."""
     run_id = datetime.now().strftime("%Y%m%d%H%M")
@@ -116,6 +149,7 @@ def execute_run(input_path) -> Path:
 
     plots.plot_all(df, run_dir)
     write_run_report(df, metrics, run_dir, run_id, input_path)
+    write_dataset_report(df, metrics, run_dir, run_id)
     update_registry(metrics, run_id, run_dir, _reporting_period(df))
 
     logger.info("Machines run %s completed successfully.", run_id)
