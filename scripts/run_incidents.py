@@ -2,11 +2,11 @@
 
 Usage
 -----
-    uv run python scripts/run_ingestion.py --input data/raw/incidents.csv
+    uv run python scripts/run_incidents.py --input data/raw/incidents.csv
 
-Thin wrapper around :func:`src.ingestion.runner.execute_run`: it parses the CLI
-arguments, loads the secret salt from ``.env`` and configures a headless
-matplotlib backend. The actual orchestration lives in ``src/ingestion/runner.py``
+Thin wrapper around :func:`src.sources.incidents.runner.execute_run`: it parses
+the CLI arguments, loads the secret salt from ``.env`` and configures a headless
+matplotlib backend. The orchestration lives in ``src/sources/incidents/runner.py``
 so it can be reused from notebooks.
 """
 
@@ -30,7 +30,7 @@ import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 
 from src import config  # noqa: E402
-from src.ingestion.runner import execute_run, load_dotenv  # noqa: E402
+from src.sources.incidents.runner import execute_run, load_dotenv  # noqa: E402
 
 # Readable accented logs in the Windows console (cp1252 by default).
 for _stream in (sys.stdout, sys.stderr):

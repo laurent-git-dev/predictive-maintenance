@@ -39,8 +39,10 @@ cp .env.example .env
 Drop the source CSV into `data/raw/incidents.csv`, then:
 
 ```bash
-uv run python scripts/run_ingestion.py --input data/raw/incidents.csv
+uv run python scripts/run_incidents.py --input data/raw/incidents.csv
 ```
+
+> Run **all sources** at once with `uv run python scripts/run_all.py`.
 
 The script creates `artifacts/ingestions/incidents/AAAAMMJJHHMM/` with:
 
@@ -55,7 +57,7 @@ The script creates `artifacts/ingestions/incidents/AAAAMMJJHHMM/` with:
 | `2.3_hist_incidents_signal.png` | Incidents per signal |
 | `2.4_hist_incidents_confidence.png` | Incidents per confidence index |
 | `3.1_corr_severity_signals.png` | Correlation: severity / signals |
-| `3.2_corr_severity_comment.png` | Correlation: severity / comment presence |
+| `3.2_corr_severity_comment.png` | Correlation: severity / comment category (chi-square + Cramer's V) |
 | `run_report.md` | Technical run report (metrics, anonymisation, confidence) |
 | `dataset_report.md` | Shareable synthesis report (business) compiling all graphs |
 
@@ -63,6 +65,24 @@ Graphs are named with an ordered numeric prefix. And the run updates
 `artifacts/ingestions/incidents/runs_registry.json`.
 
 > **Signals** are the columns prefixed by `type_` (binary 0/1 anomaly flags).
+
+---
+
+## 3b. Telemetry source
+
+A second data source: hourly machine **telemetry** (no PII, no anonymisation).
+Drop the CSV into `data/raw/telemetry.csv`, then:
+
+```bash
+uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
+```
+
+Columns: `machine_id, timestamp, temperature_c, pressure_bar, voltage_mean_v,
+rotation_mean_rpm, pieces_produced`.
+
+Produces `artifacts/ingestions/telemetry/AAAAMMJJHHMM/` with one boxplot per
+parameter (distribution per machine, `1.1_box_*.png` … `1.5_box_*.png`), a
+`run_report.md`, and updates the telemetry `runs_registry.json`.
 
 ---
 

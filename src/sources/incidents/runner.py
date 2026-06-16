@@ -1,7 +1,7 @@
 """Run orchestration: execute the pipeline and persist all artifacts.
 
 This module is the single source of truth for *producing a run*. Both the CLI
-(``scripts/run_ingestion.py``) and notebooks call :func:`execute_run` /
+(``scripts/run_incidents.py``) and notebooks call :func:`execute_run` /
 :func:`run_from_env`, so the persistence logic is never duplicated.
 
 It deliberately does NOT set the matplotlib backend: the headless ``Agg``
@@ -11,17 +11,19 @@ backend.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
 
 from src import config
-from src.ingestion.pipeline import PipelineResult, run_pipeline
-from src.visualization import correlations, distributions, histograms
+from src.common.registry import upsert_run
+from src.sources.incidents import correlations, distributions, histograms
+from src.sources.incidents.pipeline import PipelineResult, run_pipeline
 
 logger = logging.getLogger(__name__)
+
+SOURCE_NAME = "incidents"
 
 
 def load_dotenv(path: Path) -> None:
@@ -55,7 +57,7 @@ GRAPH_CATALOG: list[tuple[str, str]] = [
     ("2.3_hist_incidents_signal.png", "Incidents per signal"),
     ("2.4_hist_incidents_confidence.png", "Incidents per confidence index"),
     ("3.1_corr_severity_signals.png", "Correlation: severity / signals"),
-    ("3.2_corr_severity_comment.png", "Correlation: severity / comment presence"),
+    ("3.2_corr_severity_comment.png", "Correlation: severity / comment category"),
 ]
 
 
@@ -191,15 +193,7 @@ relying on a single isolated signal.
 
 
 def update_registry(result: PipelineResult, run_id: str, run_dir: Path) -> None:
-    """Add (or update) the run entry in ``runs_registry.json``."""
-    registry_path = config.RUNS_REGISTRY_PATH
-    registry: dict = {"runs": []}
-    if registry_path.exists():
-        try:
-            registry = json.loads(registry_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            logger.warning("Unreadable registry, resetting.")
-
+    """Add (or update) the run entry in the incidents ``runs_registry.json``."""
     m = result.metrics_source
     entry = {
         "run_id": run_id,
@@ -211,13 +205,7 @@ def update_registry(result: PipelineResult, run_id: str, run_dir: Path) -> None:
         "n_missing_per_column": m["n_missing_per_column"],
         "mean_confidence_index": result.confidence_summary.get("mean"),
     }
-    registry.setdefault("runs", [])
-    registry["runs"] = [r for r in registry["runs"] if r.get("run_id") != run_id]
-    registry["runs"].append(entry)
-    registry["runs"].sort(key=lambda r: r["run_id"])
-
-    registry_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False), encoding="utf-8")
-    logger.info("Registry updated: %s (%d runs)", registry_path.name, len(registry["runs"]))
+    upsert_run(config.RUNS_REGISTRY_PATH, entry)
 
 
 def execute_run(
@@ -260,3 +248,8 @@ def run_from_env(input_path=None) -> Path:
         os.environ.get(config.PSEUDONYM_LENGTH_ENV_VAR, config.DEFAULT_PSEUDONYM_LENGTH)
     )
     return execute_run(input_path or config.DEFAULT_INPUT_CSV, salt, pseudonym_length)
+
+
+def run_default(input_path=None) -> Path:
+    """Uniform entry point used by the multi-source orchestrator (``run_all``)."""
+    return run_from_env(input_path)

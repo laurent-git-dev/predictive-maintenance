@@ -13,8 +13,9 @@ from dataclasses import dataclass, field
 import pandas as pd
 
 from src import config
-from src.ingestion.anonymizer import anonymize_incidents
-from src.ingestion.loader import compute_quality_metrics, load_incidents
+from src.common.metrics import compute_quality_metrics
+from src.sources.incidents.anonymizer import anonymize_incidents
+from src.sources.incidents.loader import load_incidents
 
 logger = logging.getLogger(__name__)
 

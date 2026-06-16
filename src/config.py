@@ -73,3 +73,24 @@ PSEUDONYM_LENGTH_ENV_VAR: str = "PSEUDONYM_LENGTH"
 DEFAULT_PSEUDONYM_LENGTH: int = 16
 BADGE_PREFIX: str = "OP_"
 BADGE_HASH_LENGTH: int = 6
+
+# ─── Telemetry source ────────────────────────────────────────────────────────
+# Second data source: machine telemetry (no PII, no anonymisation needed).
+TELEMETRY_ARTIFACTS_DIR: Path = PROJECT_ROOT / "artifacts" / "ingestions" / "telemetry"
+DEFAULT_TELEMETRY_CSV: Path = DATA_RAW_DIR / "telemetry.csv"
+TELEMETRY_RUNS_REGISTRY_PATH: Path = TELEMETRY_ARTIFACTS_DIR / "runs_registry.json"
+
+TELEMETRY_TIMESTAMP_COLUMN: str = "timestamp"
+# Numeric parameters measured per machine over time.
+TELEMETRY_PARAM_COLUMNS: tuple[str, ...] = (
+    "temperature_c",
+    "pressure_bar",
+    "voltage_mean_v",
+    "rotation_mean_rpm",
+    "pieces_produced",
+)
+TELEMETRY_EXPECTED_COLUMNS: tuple[str, ...] = (
+    MACHINE_COLUMN,
+    TELEMETRY_TIMESTAMP_COLUMN,
+    *TELEMETRY_PARAM_COLUMNS,
+)

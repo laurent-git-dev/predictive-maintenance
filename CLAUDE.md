@@ -50,31 +50,31 @@ predictive_maintenance/
 │   └── external/
 ├── artifacts/
 │   └── ingestions/
-│       └── incidents/
-│           ├── runs_registry.json     ← registre de tous les runs
-│           └── AAAAMMJJHHMM/          ← un dossier par run
-│               ├── incidents_anonymized.csv
-│               ├── dist_incidents_day.png
-│               ├── dist_incidents_week.png
-│               ├── dist_incidents_shift.png
-│               ├── hist_signals_machine.png
-│               ├── corr_incidents_signals.png
-│               └── run_report.md
+│       ├── incidents/      ← runs de la source 1 (registry + 1 dossier/run)
+│       └── telemetry/      ← runs de la source 2
 ├── src/
-│   ├── ingestion/
-│   │   ├── loader.py
-│   │   ├── anonymizer.py
-│   │   ├── pipeline.py
-│   │   └── runner.py       ← orchestration d'un run (réutilisée par CLI + notebooks)
-│   └── visualization/
-│       ├── distributions.py
-│       ├── histograms.py
-│       └── correlations.py
+│   ├── config.py           ← chemins + schémas de toutes les sources
+│   ├── pipeline.py         ← run_all : orchestre toutes les sources
+│   ├── common/             ← code partagé, agnostique de la source
+│   │   ├── metrics.py      ← compute_quality_metrics
+│   │   └── registry.py     ← upsert_run (registre générique)
+│   └── sources/            ← une sous-package self-contained par source
+│       ├── incidents/      ← loader, anonymizer, pipeline, distributions,
+│       │                      histograms, correlations, runner
+│       └── telemetry/      ← loader, boxplots, runner
 ├── scripts/
-│   └── run_ingestion.py    ← point d'entrée CLI (wrapper de runner.py)
-└── notebooks/              ← exploration EDA (non versionnés dans DVC)
-    └── 01_exploration.ipynb
+│   ├── run_incidents.py    ← CLI source incidents
+│   ├── run_telemetry.py    ← CLI source télémétrie
+│   └── run_all.py          ← lance TOUTES les sources (src/pipeline.py)
+└── notebooks/              ← un notebook par source (non versionnés dans DVC)
+    ├── 01_incidents.ipynb
+    └── 02_telemetry.ipynb
 ```
+
+> **Principe d'organisation** : on organise **par source**. Chaque source est une
+> sous-package `src/sources/<nom>/` (loader, runner, graphes, transformations
+> spécifiques). Le code partagé vit dans `src/common/`. Ajouter une source = un
+> nouveau dossier `src/sources/<nom>/` (voir « Ajouter une source » plus bas).
 
 ---
 
@@ -111,11 +111,19 @@ uv add --native-tls <paquet>
 
 ```bash
 # Prérequis : copier .env.example en .env et renseigner ANONYMIZATION_SALT
-uv run python scripts/run_ingestion.py --input data/raw/incidents.csv
+
+# Source incidents
+uv run python scripts/run_incidents.py --input data/raw/incidents.csv
+
+# Source télémétrie
+uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
+
+# Toutes les sources en une fois
+uv run python scripts/run_all.py
 ```
 
-Le script crée automatiquement un dossier `artifacts/ingestions/incidents/AAAAMMJJHHMM/`
-et met à jour `runs_registry.json`.
+Chaque script crée un dossier `artifacts/ingestions/<source>/AAAAMMJJHHMM/`
+et met à jour le `runs_registry.json` de la source.
 
 ### DVC — versioning des données
 
@@ -222,8 +230,73 @@ Les graphes sont nommés avec un **préfixe numéroté** pour rester dans l'ordr
 | `2.3_hist_incidents_signal.png` | Histogramme des incidents par signal |
 | `2.4_hist_incidents_confidence.png` | Histogramme par indice de confiance |
 | `3.1_corr_severity_signals.png` | Corrélation sévérité / signaux |
-| `3.2_corr_severity_comment.png` | Corrélation sévérité / présence de commentaire |
+| `3.2_corr_severity_comment.png` | Corrélation sévérité / catégorie de commentaire (χ² + V de Cramér) |
 | `run_report.md` | Rapport technique du run (métriques) |
 | `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
 
 Le registre `runs_registry.json` est mis à jour automatiquement.
+
+---
+
+## Source 2 — Télémétrie machines
+
+Deuxième source de données : relevés de **télémétrie** horaires par machine.
+**Pas de PII → pas d'anonymisation.**
+
+Fichier : `data/raw/telemetry.csv`
+
+| Colonne | Type | Description |
+|---|---|---|
+| `machine_id` | str | Identifiant de la machine |
+| `timestamp` | datetime | Horodatage du relevé |
+| `temperature_c` | float | Température (°C) |
+| `pressure_bar` | float | Pression (bar) |
+| `voltage_mean_v` | float | Tension moyenne (V) |
+| `rotation_mean_rpm` | float | Vitesse de rotation moyenne (rpm) |
+| `pieces_produced` | int | Pièces produites |
+
+Pipeline parallèle (`src/telemetry/`, lancé par `scripts/run_telemetry.py`) :
+
+```bash
+uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
+```
+
+Artefacts produits dans `artifacts/ingestions/telemetry/AAAAMMJJHHMM/` :
+
+| Fichier | Description |
+|---|---|
+| `1.1_box_temperature_c.png` | Boxplot température par machine |
+| `1.2_box_pressure_bar.png` | Boxplot pression par machine |
+| `1.3_box_voltage_mean_v.png` | Boxplot tension par machine |
+| `1.4_box_rotation_mean_rpm.png` | Boxplot rotation par machine |
+| `1.5_box_pieces_produced.png` | Boxplot pièces produites par machine |
+| `run_report.md` | Rapport (métriques + stats des paramètres) |
+
+Registre dédié : `artifacts/ingestions/telemetry/runs_registry.json`.
+
+---
+
+## Ajouter une nouvelle source de données
+
+> ⚙️ **Instruction permanente** : lorsqu'une nouvelle source est demandée,
+> réaliser **directement l'ensemble** des tâches ci-dessous (sans procéder étape
+> par étape), en réutilisant `src/common/` et en suivant le modèle des sources
+> existantes.
+
+Checklist pour une source `<nom>` :
+
+1. **Schéma & chemins** dans `src/config.py` : colonnes attendues, chemin du CSV
+   (`data/raw/<nom>.csv`), dossier d'artefacts et registre
+   (`artifacts/ingestions/<nom>/`).
+2. **`src/sources/<nom>/`** :
+   - `loader.py` : `load_<nom>()` (lecture, validation de schéma, typage) ;
+   - éventuelles transformations spécifiques (ex. `anonymizer.py` si PII) ;
+   - module(s) de graphes (PNG préfixés numérotés pour rester ordonnés) ;
+   - `runner.py` : `execute_run()`, `write_run_report()`, `update_registry()`
+     (via `src.common.registry.upsert_run`), `run_default()` + `SOURCE_NAME`.
+   - réutiliser `src.common.metrics.compute_quality_metrics`.
+3. **Enregistrer** le runner dans `SOURCES` de `src/pipeline.py`.
+4. **`scripts/run_<nom>.py`** : wrapper CLI (fixe le backend `Agg`).
+5. **`notebooks/0N_<nom>.ipynb`** : même logique (Section A = graphes via `src/`,
+   Section B = analyses inline).
+6. **Documenter** dans `CLAUDE.md` (schéma + artefacts) et `README.md`.
