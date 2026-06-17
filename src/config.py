@@ -116,3 +116,14 @@ MACHINE_CRITICALITY_COLUMN: str = "criticality"
 ANALYSES_ARTIFACTS_DIR: Path = PROJECT_ROOT / "artifacts" / "analyses"
 CROSS_SOURCE_ARTIFACTS_DIR: Path = ANALYSES_ARTIFACTS_DIR / "cross_source"
 CROSS_SOURCE_RUNS_REGISTRY_PATH: Path = CROSS_SOURCE_ARTIFACTS_DIR / "runs_registry.json"
+
+# ─── Database (PostgreSQL, Dockerised) ───────────────────────────────────────
+# Read from environment (.env); defaults match docker-compose.yml.
+DB_ENV_DEFAULTS: dict[str, str] = {
+    "POSTGRES_USER": "predictive",
+    "POSTGRES_PASSWORD": "predictive",
+    "POSTGRES_DB": "predictive_maintenance",
+    "POSTGRES_HOST": "localhost",
+    "POSTGRES_PORT": "5432",
+}
+DB_CONNECT_TIMEOUT_SECONDS: int = 3

@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: predictive_maintenance_db
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-predictive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-predictive}
+      POSTGRES_DB: ${POSTGRES_DB:-predictive_maintenance}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-predictive} -d ${POSTGRES_DB:-predictive_maintenance}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
