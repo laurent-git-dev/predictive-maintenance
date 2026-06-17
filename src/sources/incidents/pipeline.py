@@ -14,7 +14,7 @@ import pandas as pd
 
 from src import config
 from src.common.metrics import compute_quality_metrics
-from src.sources.incidents.anonymizer import anonymize_incidents
+from src.processing.anonymization import anonymize_incidents
 from src.sources.incidents.loader import load_incidents
 
 logger = logging.getLogger(__name__)
