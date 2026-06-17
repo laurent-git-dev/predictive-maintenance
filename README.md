@@ -1,10 +1,10 @@
-# Industrial Predictive Maintenance — Step 2: Data Ingestion & Governance
+# Industrial Predictive Maintenance — Data Pipeline
 
-Ingestion pipeline for industrial incident reports: **loading → anonymisation →
-exploratory data analysis (EDA) → versioned dataset**.
-
-Each run produces a timestamped folder containing the anonymised dataset, the
-analysis plots and a report, and updates a runs registry.
+Orchestrated, **multi-source** data pipeline. For each source in `data/raw/`
+(2 CSV + 1 SQL) it chains **ingestion → understanding (reports/graphs) →
+processing (anonymisation, encoding, imputation, outliers) → loading into a
+PostgreSQL database**, then runs a cross-source analysis. Re-run it with one
+command whenever the input data changes.
 
 ---
 
@@ -12,6 +12,7 @@ analysis plots and a report, and updates a runs registry.
 
 - **Python 3.12** (see `.python-version`)
 - **[uv](https://docs.astral.sh/uv/)** for environment management
+- **Docker** (PostgreSQL via `docker-compose.yml`) for the database stage
 - **Git** and **DVC** for code / data versioning
 
 > ⚠️ **Corporate network**: if uv fails with `invalid peer certificate:
@@ -26,15 +27,33 @@ analysis plots and a report, and updates a runs registry.
 # 1. Sync the environment (.venv created automatically)
 uv sync                       # or: uv sync --native-tls
 
-# 2. Configure the anonymisation salt (secret, outside the repository)
+# 2. Configure secrets / DB settings
 cp .env.example .env
-# then edit .env and set ANONYMIZATION_SALT
+# edit .env: set ANONYMIZATION_SALT (and POSTGRES_* if you change defaults)
 #   python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
 ---
 
-## 3. Usage
+## 3. Quickstart — full pipeline (recommended)
+
+```bash
+docker compose up -d                      # start PostgreSQL
+uv run python scripts/run_pipeline.py     # all sources: ingest → understand → process → load DB
+#                                           then the cross-source analysis
+uv run python scripts/run_pipeline.py --no-db   # skip the database stage
+```
+
+- Idempotent and **re-runnable**: tables are fully reloaded (`to_sql` replace).
+- If PostgreSQL is not running, the **DB stage is skipped with a warning** (the rest runs).
+- Interactive exploration of every phase: `notebooks/pipeline.ipynb`.
+
+Per-source CLIs are still available (`scripts/run_{incidents,telemetry,machines}.py`,
+`run_cross_source.py`, `run_all.py`).
+
+---
+
+## 3a. Per-source usage (understanding only)
 
 Drop the source CSV into `data/raw/incidents.csv`, then:
 
@@ -115,7 +134,7 @@ uv run python scripts/run_cross_source.py
 Produces `artifacts/analyses/cross_source/AAAAMMJJHHMM/` with the joined
 `machine_profile.csv`, three cross plots (incidents vs maintenance, reactive vs
 severity, telemetry vs incidents), a `run_report.md`, and a dedicated registry.
-Interactive exploration: `notebooks/04_cross_source.ipynb`.
+Interactive exploration: `notebooks/pipeline.ipynb`.
 
 ---
 

@@ -28,6 +28,9 @@ L'objectif immédiat est de :
 | Versioning données | DVC (remote local) |
 | Manipulation données | pandas |
 | Visualisation | matplotlib |
+| SQL / ORM | SQLAlchemy (SQLite pour l'ingestion du dump, PostgreSQL pour la mise en base) |
+| Base de données | PostgreSQL (Docker, `docker-compose.yml`) |
+| Stats | scipy |
 | Qualité code | ruff, black |
 
 ---
@@ -44,46 +47,37 @@ predictive_maintenance/
 ├── uv.lock                 ← versions verrouillées (uv)
 ├── .python-version         ← Python 3.12
 ├── .dvc/                   ← config DVC (ne pas modifier manuellement)
-├── data/
-│   ├── raw/                ← données source (jamais modifiées)
-│   ├── processed/          ← données transformées
-│   └── external/
+├── docker-compose.yml      ← service PostgreSQL (mise en base)
+├── data/raw/               ← sources d'entrée (2 CSV + 1 SQL) ; jamais modifiées
 ├── artifacts/
-│   └── ingestions/
-│       ├── incidents/      ← runs de la source 1 (registry + 1 dossier/run)
-│       └── telemetry/      ← runs de la source 2
+│   ├── ingestions/<source>/← runs par source (graphes, rapports, processed.csv)
+│   └── analyses/cross_source/
 ├── src/
-│   ├── config.py           ← chemins + schémas de toutes les sources
-│   ├── pipeline.py         ← run_all : orchestre toutes les sources
-│   ├── common/             ← code partagé, agnostique de la source
-│   │   ├── metrics.py      ← compute_quality_metrics
-│   │   └── registry.py     ← upsert_run (registre générique)
-│   ├── sources/            ← ingestion : une sous-package self-contained par source
-│   │   ├── incidents/      ← loader, anonymizer, pipeline, distributions,
-│   │   │                      histograms, correlations, runner
-│   │   ├── telemetry/      ← loader, boxplots, runner
-│   │   └── machines/       ← models (ORM), loader (SQL→SQLite), plots, runner
-│   └── analyses/           ← analyses qui CROISENT plusieurs sources
-│       ├── joins.py        ← tables jointes (réutilisent les loaders des sources)
-│       ├── plots.py
-│       └── runner.py
+│   ├── config.py           ← chemins, schémas, réglages DB
+│   ├── orchestrator.py     ← run_pipeline : 4 étapes × chaque source + cross-source
+│   ├── pipeline.py         ← run_all (sources, ancien point d'entrée conservé)
+│   ├── common/             ← partagé : metrics, registry, reporting, env
+│   ├── processing/         ← OUTILS MUTUALISÉS : anonymization, transformation,
+│   │                          imputation, outliers, pipeline (apply_processing)
+│   ├── database/           ← engine (PostgreSQL) + loader (to_sql)
+│   ├── sources/            ← ingestion + compréhension (1 package/source)
+│   │   ├── registry.py     ← SOURCE_SPECS (déclaratif : ingestion/compréhension/
+│   │   │                      traitement/table par source)
+│   │   ├── incidents/ telemetry/ machines/
+│   └── analyses/           ← analyses inter-sources (joins, plots, runner)
 ├── scripts/
-│   ├── run_incidents.py    ← CLI source incidents
-│   ├── run_telemetry.py    ← CLI source télémétrie
-│   ├── run_machines.py     ← CLI source machines/maintenance
-│   ├── run_cross_source.py ← CLI analyse inter-sources
-│   └── run_all.py          ← lance TOUTES les sources (src/pipeline.py)
-└── notebooks/              ← un notebook par source + un transverse (non DVC)
-    ├── 01_incidents.ipynb
-    ├── 02_telemetry.ipynb
-    ├── 03_machines.ipynb
-    └── 04_cross_source.ipynb
+│   ├── run_pipeline.py     ← ORCHESTRATEUR : tout, toutes sources (commande unique)
+│   ├── run_all.py          ← sources seules (compréhension)
+│   └── run_{incidents,telemetry,machines,cross_source}.py ← par source/analyse
+└── notebooks/
+    └── pipeline.ipynb      ← notebook UNIQUE, toutes les phases (non DVC)
 ```
 
-> **Principe d'organisation** : on organise **par source**. Chaque source est une
-> sous-package `src/sources/<nom>/` (loader, runner, graphes, transformations
-> spécifiques). Le code partagé vit dans `src/common/`. Ajouter une source = un
-> nouveau dossier `src/sources/<nom>/` (voir « Ajouter une source » plus bas).
+> **Principe d'organisation** : **par source** sous `src/sources/<nom>/` (ingestion +
+> compréhension). Les **traitements** (`src/processing/`) et la **mise en base**
+> (`src/database/`) sont **mutualisés** et pilotés par `SOURCE_SPECS`
+> (`src/sources/registry.py`). L'**orchestrateur** (`src/orchestrator.py`) enchaîne les
+> 4 étapes pour chaque source. Code partagé dans `src/common/`.
 
 ---
 
@@ -116,23 +110,44 @@ uv add --native-tls <paquet>
 > ⚠️ Sur ce poste, le proxy d'entreprise impose `--native-tls` (ou
 > `UV_SYSTEM_CERTS=true`) pour toute opération réseau de uv.
 
-### Lancer le pipeline d'ingestion
+### Pipeline complète (orchestrateur — recommandé)
+
+Enchaîne, **pour chaque source du répertoire d'entrée**, les 4 étapes :
+**ingestion → compréhension → traitement → mise en base**, puis l'analyse inter-sources.
+**Relançable à l'identique** dès qu'une donnée change dans `data/raw/`.
 
 ```bash
-# Prérequis : copier .env.example en .env et renseigner ANONYMIZATION_SALT
-
-# Source incidents
-uv run python scripts/run_incidents.py --input data/raw/incidents.csv
-
-# Source télémétrie
-uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
-
-# Toutes les sources en une fois
-uv run python scripts/run_all.py
+# Prérequis : cp .env.example .env ; renseigner ANONYMIZATION_SALT (+ POSTGRES_* au besoin)
+docker compose up -d                       # démarre PostgreSQL (mise en base)
+uv run python scripts/run_pipeline.py      # tout, toutes les sources
+uv run python scripts/run_pipeline.py --no-db   # sans l'étape base
 ```
 
-Chaque script crée un dossier `artifacts/ingestions/<source>/AAAAMMJJHHMM/`
-et met à jour le `runs_registry.json` de la source.
+> Si PostgreSQL n'est pas démarré, l'étape de mise en base est **ignorée avec un
+> warning** (ingestion/compréhension/traitement tournent quand même).
+
+### Lancer une source isolée (ou la compréhension seule)
+
+```bash
+uv run python scripts/run_incidents.py --input data/raw/incidents.csv
+uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
+uv run python scripts/run_machines.py  --input data/raw/machines.sql
+uv run python scripts/run_cross_source.py
+uv run python scripts/run_all.py           # les 3 sources (compréhension)
+```
+
+Chaque run crée `artifacts/ingestions/<source>/AAAAMMJJHHMM/` (graphes, `run_report.md`,
+`dataset_report.md`, `processed.csv`) et met à jour le `runs_registry.json` de la source.
+
+### Base de données (PostgreSQL / Docker)
+
+```bash
+docker compose up -d        # démarre la base (port 5432, identifiants dans .env)
+docker compose ps           # statut / santé
+docker compose stop         # arrête (les données persistent dans le volume pgdata)
+```
+Les tables `incidents`, `telemetry`, `maintenance` sont **rechargées entièrement**
+(`to_sql` replace) à chaque `run_pipeline` → idempotent.
 
 ### DVC — versioning des données
 
@@ -343,7 +358,7 @@ Artefacts dans `artifacts/analyses/cross_source/AAAAMMJJHHMM/` :
 | `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
 
 Registre dédié : `artifacts/analyses/cross_source/runs_registry.json`.
-Exploration interactive : `notebooks/04_cross_source.ipynb`.
+Exploration interactive : `notebooks/pipeline.ipynb`.
 
 > Pour ajouter une analyse : un module de jointure/plots dans `src/analyses/`,
 > branché dans son `runner.py` ; même logique d'artefacts que les sources.
@@ -359,22 +374,27 @@ Exploration interactive : `notebooks/04_cross_source.ipynb`.
 
 Checklist pour une source `<nom>` :
 
-1. **Schéma & chemins** dans `src/config.py` : colonnes attendues, chemin du CSV
-   (`data/raw/<nom>.csv`), dossier d'artefacts et registre
-   (`artifacts/ingestions/<nom>/`).
+1. **Schéma & chemins** dans `src/config.py` (colonnes attendues, chemin du fichier
+   d'entrée, dossier d'artefacts/registre).
 2. **`src/sources/<nom>/`** :
-   - `loader.py` : `load_<nom>()` (lecture, validation de schéma, typage) ;
-   - éventuelles transformations spécifiques (ex. `anonymizer.py` si PII) ;
-   - module(s) de graphes (PNG préfixés numérotés pour rester ordonnés) ;
-   - `runner.py` : `execute_run()`, `write_run_report()` (technique),
-     `write_dataset_report()` (**obligatoire** — synthèse partageable, via
-     `src.common.reporting.write_dataset_report`), `update_registry()`
-     (via `src.common.registry.upsert_run`), `run_default()` + `SOURCE_NAME`.
+   - `loader.py` : `load_<nom>()` (lecture, validation, typage) ;
+   - module(s) de graphes (PNG préfixés numérotés) ;
+   - `runner.py` : `execute_run()`, `write_run_report()`, `write_dataset_report()`
+     (**obligatoire**, via `src.common.reporting`), `update_registry()`
+     (via `src.common.registry.upsert_run`), **`run_default()`** + **`load_dataframe()`**
+     (DataFrame prêt pour traitement/base ; anonymisé à l'ingestion si PII) ;
    - réutiliser `src.common.metrics.compute_quality_metrics`.
-   - **Tout run doit produire `run_report.md` ET `dataset_report.md`** (idem pour
-     les analyses inter-sources).
-3. **Enregistrer** le runner dans `SOURCES` de `src/pipeline.py`.
-4. **`scripts/run_<nom>.py`** : wrapper CLI (fixe le backend `Agg`).
-5. **`notebooks/0N_<nom>.ipynb`** : même logique (Section A = graphes via `src/`,
-   Section B = analyses inline).
-6. **Documenter** dans `CLAUDE.md` (schéma + artefacts) et `README.md`.
+3. **Traitement** : si PII, l'anonymisation se fait **à l'ingestion** (dans
+   `load_dataframe`, via `src.processing.anonymization`). Les autres traitements
+   (encodage texte→valeur, imputation, outliers) sont **déclarés**, pas codés.
+4. **Enregistrer la source dans `src/sources/registry.py`** (`SOURCE_SPECS`) :
+   `name`, `run_understanding=run_default`, `load_dataframe`, `processing`
+   (`ProcessingConfig`), `table` (nom de table PostgreSQL). → l'orchestrateur
+   (`run_pipeline`) la prend automatiquement en charge (4 étapes + base).
+5. **`scripts/run_<nom>.py`** : wrapper CLI (optionnel ; fixe le backend `Agg`).
+6. **Notebook** : ajouter une sous-section dans `notebooks/pipeline.ipynb` (phases
+   ingestion / compréhension [A via `src/` + B inline] / traitement).
+7. **Documenter** dans `CLAUDE.md` et `README.md`.
+
+> Rappel : **tout run produit `run_report.md` ET `dataset_report.md`**. La mise en
+> base utilise `to_sql` replace (idempotent) et est ignorée si la DB est éteinte.
