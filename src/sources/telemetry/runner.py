@@ -167,3 +167,8 @@ def run_telemetry(input_path=None) -> Path:
 def run_default(input_path=None) -> Path:
     """Uniform entry point used by the multi-source orchestrator (``run_all``)."""
     return run_telemetry(input_path)
+
+
+def load_dataframe(input_path=None):
+    """Return the telemetry DataFrame to be processed and stored."""
+    return load_telemetry(input_path or config.DEFAULT_TELEMETRY_CSV)

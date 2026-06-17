@@ -159,3 +159,9 @@ def execute_run(input_path) -> Path:
 def run_default(input_path=None) -> Path:
     """Uniform entry point used by the multi-source orchestrator (``run_all``)."""
     return execute_run(input_path or config.DEFAULT_MACHINES_SQL)
+
+
+def load_dataframe(input_path=None):
+    """Return the maintenance DataFrame to be processed and stored."""
+    engine = build_engine(input_path or config.DEFAULT_MACHINES_SQL)
+    return load_maintenance(engine)

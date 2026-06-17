@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src import config
+from src.common.env import load_dotenv  # re-exported for the CLI
 from src.common.registry import upsert_run
 from src.common.reporting import write_dataset_report as write_shared_report
 from src.sources.incidents import correlations, distributions, histograms
@@ -25,18 +26,6 @@ from src.sources.incidents.pipeline import PipelineResult, run_pipeline
 logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "incidents"
-
-
-def load_dotenv(path: Path) -> None:
-    """Load variables from a ``.env`` file into ``os.environ`` (minimal parser)."""
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip())
 
 
 def generate_plots(result: PipelineResult, run_dir: Path) -> list[Path]:
@@ -237,3 +226,16 @@ def run_from_env(input_path=None) -> Path:
 def run_default(input_path=None) -> Path:
     """Uniform entry point used by the multi-source orchestrator (``run_all``)."""
     return run_from_env(input_path)
+
+
+def load_dataframe(input_path=None):
+    """Return the anonymised, enriched DataFrame to be processed and stored.
+
+    Anonymisation happens here (ingestion boundary) so the DB never holds PII.
+    """
+    load_dotenv(config.PROJECT_ROOT / ".env")
+    salt = os.environ.get(config.SALT_ENV_VAR, "")
+    pseudonym_length = int(
+        os.environ.get(config.PSEUDONYM_LENGTH_ENV_VAR, config.DEFAULT_PSEUDONYM_LENGTH)
+    )
+    return run_pipeline(input_path or config.DEFAULT_INPUT_CSV, salt, pseudonym_length).data

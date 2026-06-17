@@ -25,6 +25,9 @@ data/external/*
 # Datasets anonymisés produits par les runs : versionnés via DVC.
 artifacts/ingestions/incidents/**/incidents_anonymized.csv
 
+# Datasets traités produits par l'orchestrateur (potentiellement volumineux).
+artifacts/ingestions/**/processed.csv
+
 # Clés de pseudonymisation (mapping hash -> identité réelle) : jamais dans le repo.
 *.mapping.json
 mappings/
