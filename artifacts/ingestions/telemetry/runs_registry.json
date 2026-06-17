@@ -1,14 +1,12 @@
 {
   "runs": [
     {
-      "run_id": "202606171538",
-      "folder": "artifacts/ingestions/telemetry/202606171538",
-      "n_rows": 134280,
-      "n_columns": 7,
-      "unique_machines": 15,
-      "n_missing_total": 0,
-      "n_missing_per_column": {},
-      "reporting_period": "2025-06-01 00:00 → 2026-06-08 23:00"
+      "run_id": "202606172144",
+      "folder": "artifacts/ingestions/telemetry/202606172144",
+      "bronze_rows": 135626,
+      "silver_rows": 135626,
+      "bronze_db": "135626 rows -> bronze.telemetry",
+      "silver_db": "135626 rows -> silver.telemetry"
     }
   ]
 }

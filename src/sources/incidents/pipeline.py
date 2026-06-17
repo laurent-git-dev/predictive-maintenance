@@ -1,34 +1,14 @@
-"""Ingestion pipeline orchestration: load → anonymise → enrich.
-
-The pipeline produces neither files nor plots: it returns an enriched DataFrame
-and metrics. Persistence (CSV, PNG, report, registry) is handled by the CLI
-script ``scripts/run_ingestion.py``, to keep the logic testable.
-"""
+"""Incidents feature engineering (Silver): derived columns from the Bronze data."""
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 
 import pandas as pd
 
 from src import config
-from src.common.metrics import compute_quality_metrics
-from src.processing.anonymization import anonymize_incidents
-from src.sources.incidents.loader import load_incidents
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class PipelineResult:
-    """Structured result of an ingestion pipeline run."""
-
-    data: pd.DataFrame
-    metrics_source: dict
-    metrics_processed: dict
-    anonymization_report: dict
-    confidence_summary: dict = field(default_factory=dict)
 
 
 def add_confidence_index(df: pd.DataFrame) -> pd.DataFrame:
@@ -50,41 +30,27 @@ def add_confidence_index(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def run_pipeline(
-    input_path, salt: str, pseudonym_length: int = config.DEFAULT_PSEUDONYM_LENGTH
-) -> PipelineResult:
-    """Run the full pipeline and return a :class:`PipelineResult`.
+def engineer_silver(df: pd.DataFrame) -> pd.DataFrame:
+    """Silver feature engineering for incidents (operators already pseudonymised).
 
-    Parameters
-    ----------
-    input_path : str | pathlib.Path
-        Path to the source CSV.
-    salt : str
-        Secret anonymisation salt.
-    pseudonym_length : int, optional
-        Length of the ``operator_name`` pseudonym.
+    Adds:
+    - ``datetime`` : combined date + time (fine-grained temporal analysis) ;
+    - ``comment_pii_flag`` : whether the free ``comment`` holds text (PII review) ;
+    - ``n_active_signals`` / ``confidence_index`` (see :func:`add_confidence_index`).
     """
-    df_raw = load_incidents(input_path)
-    metrics_source = compute_quality_metrics(df_raw)
+    df = df.copy()
 
-    df_anon, anon_report = anonymize_incidents(df_raw, salt, pseudonym_length)
-    df_final = add_confidence_index(df_anon)
+    if config.DATE_COLUMN in df.columns and config.TIME_COLUMN in df.columns:
+        combined = (
+            df[config.DATE_COLUMN].dt.strftime(config.DATE_FORMAT)
+            + " "
+            + df[config.TIME_COLUMN].astype(str)
+        )
+        df[config.DATETIME_COLUMN] = pd.to_datetime(combined, errors="coerce")
 
-    metrics_processed = compute_quality_metrics(df_final)
+    if config.COMMENT_COLUMN in df.columns:
+        df["comment_pii_flag"] = df[config.COMMENT_COLUMN].notna() & df[
+            config.COMMENT_COLUMN
+        ].astype(str).str.strip().ne("")
 
-    confidence_summary = {}
-    if config.CONFIDENCE_COLUMN in df_final.columns:
-        confidence_summary = {
-            "mean": round(float(df_final[config.CONFIDENCE_COLUMN].mean()), 4),
-            "median": round(float(df_final[config.CONFIDENCE_COLUMN].median()), 4),
-            "min": round(float(df_final[config.CONFIDENCE_COLUMN].min()), 4),
-            "max": round(float(df_final[config.CONFIDENCE_COLUMN].max()), 4),
-        }
-
-    return PipelineResult(
-        data=df_final,
-        metrics_source=metrics_source,
-        metrics_processed=metrics_processed,
-        anonymization_report=anon_report,
-        confidence_summary=confidence_summary,
-    )
+    return add_confidence_index(df)

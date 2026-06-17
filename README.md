@@ -1,10 +1,15 @@
 # Industrial Predictive Maintenance — Data Pipeline
 
-Orchestrated, **multi-source** data pipeline. For each source in `data/raw/`
-(2 CSV + 1 SQL) it chains **ingestion → understanding (reports/graphs) →
-processing (anonymisation, encoding, imputation, outliers) → loading into a
-PostgreSQL database**, then runs a cross-source analysis. Re-run it with one
-command whenever the input data changes.
+Orchestrated, **multi-source** data pipeline following a **medallion architecture**.
+For each source in `data/raw/` (2 CSV + 1 SQL) it builds two layers:
+
+- **Bronze** — raw, typed data (operator PII pseudonymised on the way in);
+- **Silver** — processed data (feature engineering, encoding, imputation, outliers).
+
+Each layer produces the **same per-feature understanding** (reports + graphs) and is
+loaded into its own PostgreSQL schema (`bronze.*`, `silver.*`). A cross-source analysis
+runs at the end. Re-run everything with one command whenever the input data changes.
+(**Gold** is planned next, with the same mechanics.)
 
 ---
 
@@ -39,49 +44,49 @@ cp .env.example .env
 
 ```bash
 docker compose up -d                      # start PostgreSQL
-uv run python scripts/run_pipeline.py     # all sources: ingest → understand → process → load DB
+uv run python scripts/run_pipeline.py     # all sources: Bronze + Silver (understand → load DB)
 #                                           then the cross-source analysis
 uv run python scripts/run_pipeline.py --no-db   # skip the database stage
 ```
 
-- Idempotent and **re-runnable**: tables are fully reloaded (`to_sql` replace).
+- Idempotent and **re-runnable**: tables are fully reloaded per schema (`to_sql` replace).
 - If PostgreSQL is not running, the **DB stage is skipped with a warning** (the rest runs).
-- Interactive exploration of every phase: `notebooks/pipeline.ipynb`.
+- Interactive exploration of every layer: `notebooks/pipeline.ipynb`.
 
 Per-source CLIs are still available (`scripts/run_{incidents,telemetry,machines}.py`,
-`run_cross_source.py`, `run_all.py`).
+`run_cross_source.py`), each accepting `--no-db`.
 
 ---
 
-## 3a. Per-source usage (understanding only)
+## 3a. Medallion layers & per-feature output
 
-Drop the source CSV into `data/raw/incidents.csv`, then:
+Each per-source CLI builds **both layers** and writes them under
+`artifacts/ingestions/<source>/AAAAMMJJHHMM/{bronze,silver}/`:
 
 ```bash
-uv run python scripts/run_incidents.py --input data/raw/incidents.csv
+uv run python scripts/run_incidents.py     # Bronze + Silver for incidents
 ```
 
-> Run **all sources** at once with `uv run python scripts/run_all.py`.
+All sources/layers share the same **per-feature** output model: for each numeric
+feature, a boxplot across machines (`1.<i>_box_<feature>.png`) and a distribution
+(`2.<i>_dist_<feature>.png`); plus `run_report.md` (technical) and `dataset_report.md`
+(shareable per-feature profile, synthesis adapted to each column's type). Each run
+updates the source's `runs_registry.json`.
 
-The script creates `artifacts/ingestions/incidents/AAAAMMJJHHMM/` with:
-
-| File | Description |
+| File (per layer) | Description |
 |---|---|
-| `incidents_anonymized.csv` | Cleaned, anonymised, enriched dataset (confidence index) |
-| `1.1_dist_incidents_day.png` | Incident distribution per day |
-| `1.2_dist_incidents_week.png` | Incident distribution per week |
-| `1.3_dist_incidents_shift.png` | Incident distribution per shift |
-| `2.1_hist_incidents_machine.png` | Incidents per machine |
-| `2.2_hist_incidents_operator.png` | Incidents per operator (pseudonymised) |
-| `2.3_hist_incidents_signal.png` | Incidents per signal |
-| `2.4_hist_incidents_confidence.png` | Incidents per confidence index |
-| `3.1_corr_severity_signals.png` | Correlation: severity / signals |
-| `3.2_corr_severity_comment.png` | Correlation: severity / comment category (chi-square + Cramer's V) |
-| `run_report.md` | Technical run report (metrics, anonymisation, confidence) |
-| `dataset_report.md` | Shareable synthesis report (business) compiling all graphs |
+| `<source>.csv` | Layer dataset (gitignored; versionable via DVC) |
+| `1.<i>_box_<feature>.png` | Boxplot of a numeric feature across machines |
+| `2.<i>_dist_<feature>.png` | Distribution (histogram + density/KDE) of a feature |
+| `run_report.md` | Technical layer report (metrics + missing per column) |
+| `dataset_report.md` | Shareable per-feature synthesis report |
 
-Graphs are named with an ordered numeric prefix. And the run updates
-`artifacts/ingestions/incidents/runs_registry.json`.
+Numeric features per layer: **incidents** — Bronze `severity`; Silver `severity`,
+`n_active_signals`, `confidence_index`. **telemetry** — the 5 parameters (Bronze = Silver).
+**machines** — `duration_hours` (Bronze = Silver).
+
+DB tables: `{bronze,silver}.incidents`, `{bronze,silver}.telemetry`,
+`{bronze,silver}.maintenance`.
 
 > **Signals** are the columns prefixed by `type_` (binary 0/1 anomaly flags).
 
@@ -89,19 +94,16 @@ Graphs are named with an ordered numeric prefix. And the run updates
 
 ## 3b. Telemetry source
 
-A second data source: hourly machine **telemetry** (no PII, no anonymisation).
-Drop the CSV into `data/raw/telemetry.csv`, then:
+A second data source: hourly machine **telemetry** (no PII). Drop the CSV into
+`data/raw/telemetry.csv`, then:
 
 ```bash
-uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
+uv run python scripts/run_telemetry.py
 ```
 
 Columns: `machine_id, timestamp, temperature_c, pressure_bar, voltage_mean_v,
-rotation_mean_rpm, pieces_produced`.
-
-Produces `artifacts/ingestions/telemetry/AAAAMMJJHHMM/` with one boxplot per
-parameter (distribution per machine, `1.1_box_*.png` … `1.5_box_*.png`), a
-`run_report.md`, and updates the telemetry `runs_registry.json`.
+rotation_mean_rpm, pieces_produced`. Bronze = raw load; Silver = median imputation +
+IQR outlier treatment on the 5 parameters.
 
 ---
 
@@ -113,12 +115,11 @@ database via **SQLAlchemy ORM** (no PostgreSQL server needed), then read into
 pandas.
 
 ```bash
-uv run python scripts/run_machines.py --input data/raw/machines.sql
+uv run python scripts/run_machines.py
 ```
 
-Produces `artifacts/ingestions/machines/AAAAMMJJHHMM/` with four plots
-(maintenance per machine, duration per machine, proactive vs reactive, per
-component), a `run_report.md`, and updates the machines `runs_registry.json`.
+Bronze = raw maintenance events; Silver = encoding (`maintenance_type`, `component`)
++ IQR outlier treatment on `duration_hours`.
 
 ---
 
@@ -172,10 +173,12 @@ Raw data and produced datasets are **never** committed to Git: only the `.dvc`
 pointers are.
 
 ```bash
-# Version an anonymised dataset produced by a run
-dvc add artifacts/ingestions/incidents/AAAAMMJJHHMM/incidents_anonymized.csv
-git add artifacts/ingestions/incidents/AAAAMMJJHHMM/incidents_anonymized.csv.dvc
-git commit -m "feat(data): anonymised dataset run AAAAMMJJHHMM"
+# Version the bronze/silver datasets produced by a run
+dvc add artifacts/ingestions/incidents/AAAAMMJJHHMM/bronze/incidents.csv \
+        artifacts/ingestions/incidents/AAAAMMJJHHMM/silver/incidents.csv
+git add artifacts/ingestions/incidents/AAAAMMJJHHMM/bronze/incidents.csv.dvc \
+        artifacts/ingestions/incidents/AAAAMMJJHHMM/silver/incidents.csv.dvc
+git commit -m "feat(data): bronze/silver datasets run AAAAMMJJHHMM"
 
 # Push the data to the local DVC remote
 dvc push

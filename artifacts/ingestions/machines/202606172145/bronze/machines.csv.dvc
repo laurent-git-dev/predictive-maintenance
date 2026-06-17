@@ -1,0 +1,5 @@
+outs:
+- md5: ca8d4ea2da1b1a73b70400e5b0ffe890
+  size: 240174
+  hash: md5
+  path: machines.csv

@@ -67,7 +67,10 @@ def _validate_schema(df: pd.DataFrame) -> None:
 
 
 def _coerce_types(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply typing: dates, integer signals, combined datetime."""
+    """Apply Bronze-level typing only: dates and integer signals.
+
+    The combined ``datetime`` column is feature engineering and lives in Silver.
+    """
     df = df.copy()
 
     # Date as ISO 8601.
@@ -75,15 +78,6 @@ def _coerce_types(df: pd.DataFrame) -> pd.DataFrame:
         df[config.DATE_COLUMN] = pd.to_datetime(
             df[config.DATE_COLUMN], format=config.DATE_FORMAT, errors="coerce"
         )
-
-    # Combined datetime column (date + time) for fine-grained temporal analysis.
-    if config.DATE_COLUMN in df.columns and config.TIME_COLUMN in df.columns:
-        combined = (
-            df[config.DATE_COLUMN].dt.strftime(config.DATE_FORMAT)
-            + " "
-            + df[config.TIME_COLUMN].astype(str)
-        )
-        df[config.DATETIME_COLUMN] = pd.to_datetime(combined, errors="coerce")
 
     # Signals: nullable integers (0/1). Also handles boolean values.
     for col in config.SIGNAL_COLUMNS:

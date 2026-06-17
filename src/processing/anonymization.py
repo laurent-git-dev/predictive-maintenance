@@ -67,29 +67,19 @@ def opaque_badge(value: str, salt: str) -> str:
     return f"{config.BADGE_PREFIX}{digest}"
 
 
-def anonymize_incidents(
+def pseudonymise_operators(
     df: pd.DataFrame, salt: str, pseudonym_length: int = config.DEFAULT_PSEUDONYM_LENGTH
-) -> tuple[pd.DataFrame, dict]:
-    """Anonymise the PII columns of an incidents DataFrame.
+) -> pd.DataFrame:
+    """Pseudonymise the operator PII columns in place (Bronze privacy gate).
 
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        Source data (left unchanged: a copy is returned).
-    salt : str
-        Secret HMAC salt. Must be non-empty.
-    pseudonym_length : int, optional
-        Length of the ``operator_name`` pseudonym.
-
-    Returns
-    -------
-    tuple[pandas.DataFrame, dict]
-        The anonymised DataFrame and a report on the PII transformations.
+    Handles ``operator_name`` (truncated HMAC-SHA256) and ``operator_badge`` (opaque
+    ``OP_xxxxxx``). Deterministic and irreversible without the secret salt. The free
+    ``comment`` column is left untouched here (flagged later, in Silver).
 
     Raises
     ------
     ValueError
-        If the salt is empty (weak anonymisation is forbidden).
+        If the salt is empty/unconfigured (weak anonymisation is forbidden).
     """
     if not salt or salt == "change-me-with-a-long-random-secret":
         raise ValueError(
@@ -98,32 +88,13 @@ def anonymize_incidents(
         )
 
     df = df.copy()
-    report: dict = {"processed_columns": [], "method": {}}
-
     if "operator_name" in df.columns:
         df["operator_name"] = df["operator_name"].map(
             lambda v: pseudonymize_name(v, salt, pseudonym_length) if pd.notna(v) else v
         )
-        report["processed_columns"].append("operator_name")
-        report["method"][
-            "operator_name"
-        ] = f"Truncated HMAC-SHA256 to {pseudonym_length} characters (secret salt)"
-
     if "operator_badge" in df.columns:
         df["operator_badge"] = df["operator_badge"].map(
             lambda v: opaque_badge(v, salt) if pd.notna(v) else v
         )
-        report["processed_columns"].append("operator_badge")
-        report["method"]["operator_badge"] = "Opaque identifier OP_xxxxxx (HMAC-SHA256)"
-
-    if config.COMMENT_COLUMN in df.columns:
-        df["comment_pii_flag"] = df[config.COMMENT_COLUMN].notna() & df[
-            config.COMMENT_COLUMN
-        ].astype(str).str.strip().ne("")
-        report["processed_columns"].append(config.COMMENT_COLUMN)
-        report["method"][
-            config.COMMENT_COLUMN
-        ] = "Kept + comment_pii_flag column (manual review recommended)"
-
-    logger.info("Anonymisation applied to: %s", report["processed_columns"])
-    return df, report
+    logger.info("Operators pseudonymised (operator_name, operator_badge).")
+    return df

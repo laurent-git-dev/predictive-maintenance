@@ -22,6 +22,7 @@ def write_dataset_report(
     sections: dict[str, list[tuple[str, str]]],
     notes: list[str],
     intro: str = "",
+    extra_markdown: str = "",
     filename: str = "dataset_report.md",
 ) -> Path:
     """Write a shareable, business-friendly synthesis report compiling all graphs.
@@ -61,6 +62,7 @@ def write_dataset_report(
 
     notes_md = "\n".join(f"- {n}" for n in notes)
     intro_md = f"{intro}\n\n" if intro else ""
+    extra_md = f"{extra_markdown}\n\n" if extra_markdown else ""
 
     content = f"""# {title}
 
@@ -72,7 +74,7 @@ def write_dataset_report(
 |---|---|
 {ind_lines}
 
-{intro_md}{graphs_md}
+{intro_md}{extra_md}{graphs_md}
 ## Notes for business teams
 
 {notes_md}

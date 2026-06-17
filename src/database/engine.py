@@ -31,6 +31,14 @@ def get_engine() -> Engine:
     )
 
 
+def ensure_schema(engine: Engine, schema: str) -> None:
+    """Create the schema if it does not exist (idempotent)."""
+    from sqlalchemy.schema import CreateSchema
+
+    with engine.begin() as conn:
+        conn.execute(CreateSchema(schema, if_not_exists=True))
+
+
 def is_available() -> bool:
     """Return ``True`` if PostgreSQL is reachable; never raises (logs a warning)."""
     try:

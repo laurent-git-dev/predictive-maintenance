@@ -1,10 +1,10 @@
 {
   "runs": [
     {
-      "run_id": "202606171538",
-      "folder": "artifacts/analyses/cross_source/202606171538",
+      "run_id": "202606172145",
+      "folder": "artifacts/analyses/cross_source/202606172145",
       "n_machines": 15,
-      "n_reactive_linked": 25,
+      "n_reactive_linked": 1472,
       "sources": [
         "incidents",
         "telemetry",

@@ -22,11 +22,10 @@ data/external/*
 !data/**/.gitkeep
 !data/**/*.dvc
 
-# Datasets anonymisés produits par les runs : versionnés via DVC.
-artifacts/ingestions/incidents/**/incidents_anonymized.csv
-
-# Datasets traités produits par l'orchestrateur (potentiellement volumineux).
-artifacts/ingestions/**/processed.csv
+# Datasets produits par couche (bronze/silver) — potentiellement volumineux,
+# et le bronze peut contenir du texte libre. Versionnables via DVC au besoin.
+artifacts/ingestions/**/bronze/*.csv
+artifacts/ingestions/**/silver/*.csv
 
 # Clés de pseudonymisation (mapping hash -> identité réelle) : jamais dans le repo.
 *.mapping.json

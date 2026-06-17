@@ -127,3 +127,7 @@ DB_ENV_DEFAULTS: dict[str, str] = {
     "POSTGRES_PORT": "5432",
 }
 DB_CONNECT_TIMEOUT_SECONDS: int = 3
+
+# Medallion layers → PostgreSQL schemas (1 table per source in each layer).
+BRONZE_SCHEMA: str = "bronze"
+SILVER_SCHEMA: str = "silver"

@@ -50,34 +50,35 @@ predictive_maintenance/
 ├── docker-compose.yml      ← service PostgreSQL (mise en base)
 ├── data/raw/               ← sources d'entrée (2 CSV + 1 SQL) ; jamais modifiées
 ├── artifacts/
-│   ├── ingestions/<source>/← runs par source (graphes, rapports, processed.csv)
+│   ├── ingestions/<source>/<run>/{bronze,silver}/ ← graphes + rapports par couche
 │   └── analyses/cross_source/
 ├── src/
-│   ├── config.py           ← chemins, schémas, réglages DB
-│   ├── orchestrator.py     ← run_pipeline : 4 étapes × chaque source + cross-source
-│   ├── pipeline.py         ← run_all (sources, ancien point d'entrée conservé)
-│   ├── common/             ← partagé : metrics, registry, reporting, env
+│   ├── config.py           ← chemins, schémas, réglages DB, BRONZE/SILVER_SCHEMA
+│   ├── orchestrator.py     ← run_pipeline : Bronze→Silver × chaque source + cross-source
+│   ├── common/             ← partagé : metrics, registry, reporting, env, profiling,
+│   │                          stage (run_layer : compréhension + rapports + mise en base)
 │   ├── processing/         ← OUTILS MUTUALISÉS : anonymization, transformation,
 │   │                          imputation, outliers, pipeline (apply_processing)
-│   ├── database/           ← engine (PostgreSQL) + loader (to_sql)
-│   ├── sources/            ← ingestion + compréhension (1 package/source)
-│   │   ├── registry.py     ← SOURCE_SPECS (déclaratif : ingestion/compréhension/
-│   │   │                      traitement/table par source)
+│   ├── database/           ← engine (PostgreSQL, ensure_schema) + loader (to_sql par schéma)
+│   ├── sources/            ← 1 package/source (runner MINCE : load_bronze/to_silver/numeric)
+│   │   ├── registry.py     ← SOURCE_SPECS (load_bronze, to_silver, numeric, table)
 │   │   ├── incidents/ telemetry/ machines/
 │   └── analyses/           ← analyses inter-sources (joins, plots, runner)
 ├── scripts/
-│   ├── run_pipeline.py     ← ORCHESTRATEUR : tout, toutes sources (commande unique)
-│   ├── run_all.py          ← sources seules (compréhension)
+│   ├── run_pipeline.py     ← ORCHESTRATEUR : tout, toutes sources, Bronze+Silver (commande unique)
 │   └── run_{incidents,telemetry,machines,cross_source}.py ← par source/analyse
 └── notebooks/
     └── pipeline.ipynb      ← notebook UNIQUE, toutes les phases (non DVC)
 ```
 
-> **Principe d'organisation** : **par source** sous `src/sources/<nom>/` (ingestion +
-> compréhension). Les **traitements** (`src/processing/`) et la **mise en base**
-> (`src/database/`) sont **mutualisés** et pilotés par `SOURCE_SPECS`
-> (`src/sources/registry.py`). L'**orchestrateur** (`src/orchestrator.py`) enchaîne les
-> 4 étapes pour chaque source. Code partagé dans `src/common/`.
+> **Architecture médaillon** : pour chaque source, **Bronze** (données brutes ;
+> `operator_name`/`operator_badge` pseudonymisés dès le Bronze) puis **Silver**
+> (traitement : feature engineering, encodage, imputation, outliers). Chaque couche
+> produit la **même compréhension per-feature** (synthèse adaptée au type + boxplot/
+> distribution) et une **table** dans son schéma PostgreSQL (`bronze.*`, `silver.*`).
+> **Gold** viendra ensuite (même mécanique). Tout est **mutualisé** dans `src/common/`
+> (`stage.run_layer`, `profiling`) ; les runners de source sont **minces** (`load_bronze`,
+> `to_silver`, `BRONZE_NUMERIC`/`SILVER_NUMERIC`). Orchestrateur : `src/orchestrator.py`.
 
 ---
 
@@ -112,32 +113,34 @@ uv add --native-tls <paquet>
 
 ### Pipeline complète (orchestrateur — recommandé)
 
-Enchaîne, **pour chaque source du répertoire d'entrée**, les 4 étapes :
-**ingestion → compréhension → traitement → mise en base**, puis l'analyse inter-sources.
-**Relançable à l'identique** dès qu'une donnée change dans `data/raw/`.
+Enchaîne, **pour chaque source**, les deux couches médaillon **Bronze → Silver**
+(compréhension per-feature + rapports + mise en base par schéma à chaque couche),
+puis l'analyse inter-sources. **Relançable à l'identique** dès qu'une donnée change
+dans `data/raw/`.
 
 ```bash
 # Prérequis : cp .env.example .env ; renseigner ANONYMIZATION_SALT (+ POSTGRES_* au besoin)
 docker compose up -d                       # démarre PostgreSQL (mise en base)
-uv run python scripts/run_pipeline.py      # tout, toutes les sources
+uv run python scripts/run_pipeline.py      # tout, toutes les sources (Bronze + Silver)
 uv run python scripts/run_pipeline.py --no-db   # sans l'étape base
 ```
 
 > Si PostgreSQL n'est pas démarré, l'étape de mise en base est **ignorée avec un
-> warning** (ingestion/compréhension/traitement tournent quand même).
+> warning** (Bronze/Silver : compréhension + rapports tournent quand même).
 
-### Lancer une source isolée (ou la compréhension seule)
+### Lancer une source isolée
 
 ```bash
-uv run python scripts/run_incidents.py --input data/raw/incidents.csv
-uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
-uv run python scripts/run_machines.py  --input data/raw/machines.sql
+uv run python scripts/run_incidents.py            # Bronze + Silver incidents
+uv run python scripts/run_telemetry.py
+uv run python scripts/run_machines.py
 uv run python scripts/run_cross_source.py
-uv run python scripts/run_all.py           # les 3 sources (compréhension)
+uv run python scripts/run_incidents.py --no-db    # sans l'étape base
 ```
 
-Chaque run crée `artifacts/ingestions/<source>/AAAAMMJJHHMM/` (graphes, `run_report.md`,
-`dataset_report.md`, `processed.csv`) et met à jour le `runs_registry.json` de la source.
+Chaque run crée `artifacts/ingestions/<source>/AAAAMMJJHHMM/{bronze,silver}/`
+(graphes per-feature, `run_report.md`, `dataset_report.md`, `<source>.csv`) et met à
+jour le `runs_registry.json` de la source (lignes Bronze/Silver + statut base).
 
 ### Base de données (PostgreSQL / Docker)
 
@@ -146,17 +149,22 @@ docker compose up -d        # démarre la base (port 5432, identifiants dans .en
 docker compose ps           # statut / santé
 docker compose stop         # arrête (les données persistent dans le volume pgdata)
 ```
-Les tables `incidents`, `telemetry`, `maintenance` sont **rechargées entièrement**
-(`to_sql` replace) à chaque `run_pipeline` → idempotent.
+Chaque source produit **deux tables** : `bronze.<table>` (brut, opérateurs
+pseudonymisés) et `silver.<table>` (après traitement), où `<table>` ∈
+{`incidents`, `telemetry`, `maintenance`}. Les schémas `bronze`/`silver` sont créés
+au besoin (`CREATE SCHEMA IF NOT EXISTS`) et les tables **rechargées entièrement**
+(`to_sql` replace) à chaque run → idempotent.
 
 ### DVC — versioning des données
 
 ```powershell
-# Versionner le dataset anonymisé produit par un run (remote local : pas de réseau)
+# Versionner les datasets produits par un run (remote local : pas de réseau)
 $RUN = "AAAAMMJJHHMM"
-uv run dvc add "artifacts/ingestions/incidents/$RUN/incidents_anonymized.csv"
-git add "artifacts/ingestions/incidents/$RUN/incidents_anonymized.csv.dvc"
-git commit -m "feat(data): add anonymised dataset run $RUN"
+uv run dvc add "artifacts/ingestions/incidents/$RUN/bronze/incidents.csv" `
+               "artifacts/ingestions/incidents/$RUN/silver/incidents.csv"
+git add "artifacts/ingestions/incidents/$RUN/bronze/incidents.csv.dvc" `
+        "artifacts/ingestions/incidents/$RUN/silver/incidents.csv.dvc"
+git commit -m "feat(data): add bronze/silver datasets run $RUN"
 uv run dvc push
 ```
 
@@ -223,9 +231,14 @@ Cette définition fait foi dans tout le code (`SIGNAL_COLUMNS` dans `src/config.
 et dans les analyses.
 
 **Colonnes PII (données personnelles identifiables)** :
-- `operator_name` → remplacé par un hash SHA-256 tronqué (pseudonymisation)
-- `operator_badge` → remplacé par un identifiant opaque `OP_XXXX`
-- `comment` → conservé mais signalé (analyse manuelle recommandée)
+- `operator_name` → pseudonymisé par HMAC-SHA256 tronqué (**dès le Bronze**)
+- `operator_badge` → pseudonymisé par HMAC-SHA256 tronqué (**dès le Bronze**)
+- `comment` → conservé **brut** en Bronze ; en Silver, un drapeau `comment_pii_flag`
+  signale la présence de texte libre (revue manuelle recommandée)
+
+> Exception médaillon : les opérateurs (`operator_name`, `operator_badge`) sont
+> pseudonymisés **dès le Bronze** (PII jamais persistée en clair). Tous les autres
+> traitements n'ont lieu qu'en Silver.
 
 ---
 
@@ -237,28 +250,36 @@ et dans les analyses.
 
 ---
 
-## Artefacts attendus (étape 2)
+## Artefacts attendus (par couche médaillon)
 
-À chaque run d'ingestion, les fichiers suivants doivent être produits :
+À chaque run, **chaque couche** (`bronze/`, `silver/`) produit les mêmes artefacts.
 
-Les graphes sont nommés avec un **préfixe numéroté** pour rester dans l'ordre.
+**Modèle « per-feature » (uniforme pour toutes les sources)** : pour chaque
+**feature numérique**, un boxplot par machine et une distribution (histogramme +
+densité/KDE). La synthèse par colonne, **adaptée au type** (uniques, % manquants ;
+numérique : min/Q1/médiane/Q3/max + plage + écart-type + skew + outliers IQR ;
+datetime : plage temporelle ; catégoriel : mode ; booléen : % True), est dans
+`dataset_report.md`.
 
-| Fichier | Description |
+```
+artifacts/ingestions/<source>/<run>/{bronze,silver}/
+```
+
+| Fichier (par couche) | Description |
 |---|---|
-| `incidents_anonymized.csv` | Dataset nettoyé et anonymisé |
-| `1.1_dist_incidents_day.png` | Distribution des incidents par jour |
-| `1.2_dist_incidents_week.png` | Distribution par semaine |
-| `1.3_dist_incidents_shift.png` | Distribution par shift |
-| `2.1_hist_incidents_machine.png` | Histogramme des incidents par machine |
-| `2.2_hist_incidents_operator.png` | Histogramme des incidents par opérateur |
-| `2.3_hist_incidents_signal.png` | Histogramme des incidents par signal |
-| `2.4_hist_incidents_confidence.png` | Histogramme par indice de confiance |
-| `3.1_corr_severity_signals.png` | Corrélation sévérité / signaux |
-| `3.2_corr_severity_comment.png` | Corrélation sévérité / catégorie de commentaire (χ² + V de Cramér) |
-| `run_report.md` | Rapport technique du run (métriques) |
-| `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
+| `<source>.csv` | Dataset de la couche (gitignoré ; versionnable via DVC) |
+| `1.<i>_box_<feature>.png` | Boxplot d'une feature numérique par machine |
+| `2.<i>_dist_<feature>.png` | Distribution (histogramme + densité/KDE) d'une feature |
+| `run_report.md` | Rapport technique de la couche (métriques + manquants/colonne) |
+| `dataset_report.md` | Rapport partageable : profil **per-feature** (synthèse + graphes) |
 
-Le registre `runs_registry.json` est mis à jour automatiquement.
+> Features numériques par source et couche : **incidents** — Bronze = `severity` ;
+> Silver = `severity`, `n_active_signals`, `confidence_index`. **telemetry** — les 5
+> paramètres (Bronze = Silver). **machines** — `duration_hours` (Bronze = Silver).
+> La synthèse couvre **toutes** les colonnes.
+
+Le registre `runs_registry.json` est mis à jour automatiquement (lignes Bronze/Silver
++ statut de mise en base par schéma).
 
 ---
 
@@ -279,25 +300,18 @@ Fichier : `data/raw/telemetry.csv`
 | `rotation_mean_rpm` | float | Vitesse de rotation moyenne (rpm) |
 | `pieces_produced` | int | Pièces produites |
 
-Pipeline parallèle (`src/telemetry/`, lancé par `scripts/run_telemetry.py`) :
+Source `src/sources/telemetry/`, lancée par `scripts/run_telemetry.py` :
 
 ```bash
-uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
+uv run python scripts/run_telemetry.py
 ```
 
-Artefacts produits dans `artifacts/ingestions/telemetry/AAAAMMJJHHMM/` :
-
-| Fichier | Description |
-|---|---|
-| `1.1_box_temperature_c.png` | Boxplot température par machine |
-| `1.2_box_pressure_bar.png` | Boxplot pression par machine |
-| `1.3_box_voltage_mean_v.png` | Boxplot tension par machine |
-| `1.4_box_rotation_mean_rpm.png` | Boxplot rotation par machine |
-| `1.5_box_pieces_produced.png` | Boxplot pièces produites par machine |
-| `run_report.md` | Rapport technique (métriques + stats des paramètres) |
-| `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
+Artefacts produits dans `artifacts/ingestions/telemetry/AAAAMMJJHHMM/{bronze,silver}/`,
+modèle **per-feature** (voir « Artefacts attendus »). Pas de PII : Bronze = `load_telemetry`,
+Silver = imputation (médiane) + traitement des outliers (IQR) sur les 5 paramètres.
 
 Registre dédié : `artifacts/ingestions/telemetry/runs_registry.json`.
+Tables : `bronze.telemetry`, `silver.telemetry`.
 
 ---
 
@@ -317,21 +331,16 @@ non portable (`NOW()`, `ON CONFLICT`) est neutralisée au chargement. À la lect
 `machine_code` est renommé `machine_id` (cohérence inter-sources / jointures).
 
 ```bash
-uv run python scripts/run_machines.py --input data/raw/machines.sql
+uv run python scripts/run_machines.py
 ```
 
-Artefacts dans `artifacts/ingestions/machines/AAAAMMJJHHMM/` :
-
-| Fichier | Description |
-|---|---|
-| `1.1_hist_maintenance_machine.png` | Nombre de maintenances par machine |
-| `1.2_box_duration_machine.png` | Durée de maintenance par machine (boxplot) |
-| `1.3_maintenance_type_split.png` | Proactive vs reactive par machine |
-| `1.4_hist_maintenance_component.png` | Maintenances par composant |
-| `run_report.md` | Rapport technique (métriques + synthèse maintenance) |
-| `dataset_report.md` | Rapport de synthèse partageable (métier) compilant les graphes |
+Artefacts dans `artifacts/ingestions/machines/AAAAMMJJHHMM/{bronze,silver}/`, modèle
+**per-feature** (`1.1_box_duration_hours.png`, `2.1_dist_duration_hours.png`,
+`run_report.md`, `dataset_report.md`). Silver = encodage (`maintenance_type`,
+`component`) + traitement des outliers (IQR) sur `duration_hours`.
 
 Registre dédié : `artifacts/ingestions/machines/runs_registry.json`.
+Tables : `bronze.maintenance`, `silver.maintenance`.
 
 ---
 
@@ -372,29 +381,36 @@ Exploration interactive : `notebooks/pipeline.ipynb`.
 > par étape), en réutilisant `src/common/` et en suivant le modèle des sources
 > existantes.
 
-Checklist pour une source `<nom>` :
+Checklist pour une source `<nom>` (le **runner reste mince** : toute la mécanique —
+compréhension per-feature, rapports, mise en base — est mutualisée dans
+`src/common/stage.run_layer` et `src/common/profiling`) :
 
 1. **Schéma & chemins** dans `src/config.py` (colonnes attendues, chemin du fichier
    d'entrée, dossier d'artefacts/registre).
 2. **`src/sources/<nom>/`** :
-   - `loader.py` : `load_<nom>()` (lecture, validation, typage) ;
-   - module(s) de graphes (PNG préfixés numérotés) ;
-   - `runner.py` : `execute_run()`, `write_run_report()`, `write_dataset_report()`
-     (**obligatoire**, via `src.common.reporting`), `update_registry()`
-     (via `src.common.registry.upsert_run`), **`run_default()`** + **`load_dataframe()`**
-     (DataFrame prêt pour traitement/base ; anonymisé à l'ingestion si PII) ;
-   - réutiliser `src.common.metrics.compute_quality_metrics`.
-3. **Traitement** : si PII, l'anonymisation se fait **à l'ingestion** (dans
-   `load_dataframe`, via `src.processing.anonymization`). Les autres traitements
-   (encodage texte→valeur, imputation, outliers) sont **déclarés**, pas codés.
-4. **Enregistrer la source dans `src/sources/registry.py`** (`SOURCE_SPECS`) :
-   `name`, `run_understanding=run_default`, `load_dataframe`, `processing`
-   (`ProcessingConfig`), `table` (nom de table PostgreSQL). → l'orchestrateur
-   (`run_pipeline`) la prend automatiquement en charge (4 étapes + base).
-5. **`scripts/run_<nom>.py`** : wrapper CLI (optionnel ; fixe le backend `Agg`).
-6. **Notebook** : ajouter une sous-section dans `notebooks/pipeline.ipynb` (phases
-   ingestion / compréhension [A via `src/` + B inline] / traitement).
+   - `loader.py` : `load_<nom>()` (lecture, validation, typage **brut** — pas de
+     traitement) ;
+   - `runner.py` (**mince**) exposant :
+     - `SOURCE_NAME`, `TABLE` (nom de table PostgreSQL) ;
+     - `BRONZE_NUMERIC` / `SILVER_NUMERIC` (features numériques à grapher par couche) ;
+     - `load_bronze(input_path=None) -> df` : brut typé (+ `pseudonymise_operators`
+       si PII opérateurs, via `src.processing.anonymization`) ;
+     - `to_silver(bronze_df) -> df` : feature engineering + `apply_processing(...)`
+       (`src.processing` : encodage / imputation / outliers **déjà existants**).
+3. **Aucun traitement en Bronze** (sauf pseudonymisation PII opérateurs). Tout le
+   reste (encodage texte→valeur, imputation, outliers, features dérivées) est en
+   **Silver** via `to_silver`, en réutilisant `src.processing`.
+4. **Enregistrer la source dans `src/sources/registry.py`** (`SOURCE_SPECS`) via
+   `_spec(<nom>_runner)` : `name`, `load_bronze`, `to_silver`, `bronze_numeric`,
+   `silver_numeric`, `table`, `machine_col`. → l'orchestrateur (`run_pipeline`) la
+   prend automatiquement en charge (Bronze + Silver + mise en base par schéma).
+5. **`scripts/run_<nom>.py`** : wrapper CLI minimal (`run_source_by_name("<nom>")`,
+   fixe le backend `Agg`, option `--no-db`).
+6. **Notebook** : ajouter une sous-section dans `notebooks/pipeline.ipynb` (couches
+   **Bronze** puis **Silver** : `load_bronze()` puis `to_silver()`, profilées via
+   `show_per_feature`).
 7. **Documenter** dans `CLAUDE.md` et `README.md`.
 
-> Rappel : **tout run produit `run_report.md` ET `dataset_report.md`**. La mise en
-> base utilise `to_sql` replace (idempotent) et est ignorée si la DB est éteinte.
+> Rappel : **chaque couche produit `run_report.md` ET `dataset_report.md`** (per-feature).
+> La mise en base utilise `to_sql` replace par schéma (`bronze.*` / `silver.*`,
+> idempotent) et est ignorée si la DB est éteinte.

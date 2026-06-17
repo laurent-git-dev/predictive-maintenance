@@ -1,167 +1,38 @@
-"""Machines/maintenance run orchestration: load SQL, plot, report, registry.
+"""Machines/maintenance source — bronze/silver builders for the orchestrator.
 
-Single source of truth for producing a machines run, reused by the CLI
-(``scripts/run_machines.py``) and notebooks. Does not set the matplotlib backend
-(the CLI sets the headless Agg backend).
+- Bronze : maintenance events loaded from the SQL dump (no PII).
+- Silver : declared processing (encode type/component, IQR outlier clipping on duration).
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from pathlib import Path
-
-import pandas as pd
 
 from src import config
-from src.common.metrics import compute_quality_metrics
-from src.common.registry import upsert_run
-from src.common.reporting import write_dataset_report as write_shared_report
-from src.sources.machines import plots
+from src.processing.pipeline import ProcessingConfig, apply_processing
 from src.sources.machines.loader import build_engine, load_maintenance
 
 logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "machines"
+TABLE = "maintenance"
+BRONZE_NUMERIC = [config.MAINTENANCE_DURATION_COLUMN]
+SILVER_NUMERIC = [config.MAINTENANCE_DURATION_COLUMN]
 
-GRAPH_CATALOG: list[tuple[str, str]] = [
-    ("1.1_hist_maintenance_machine.png", "Maintenance events per machine"),
-    ("1.2_box_duration_machine.png", "Maintenance duration by machine"),
-    ("1.3_maintenance_type_split.png", "Proactive vs reactive per machine"),
-    ("1.4_hist_maintenance_component.png", "Maintenance events per component"),
-]
-
-
-def _reporting_period(df: pd.DataFrame) -> str:
-    col = config.MAINTENANCE_TIMESTAMP_COLUMN
-    if col in df.columns and df[col].notna().any():
-        ts = df[col].dropna()
-        return f"{ts.min():%Y-%m-%d} → {ts.max():%Y-%m-%d}"
-    return "n/a"
+_PROCESSING = ProcessingConfig(
+    encode={config.MAINTENANCE_TYPE_COLUMN: {"proactive": 0, "reactive": 1}, "component": None},
+    impute={},
+    outliers=[config.MAINTENANCE_DURATION_COLUMN],
+)
 
 
-def write_run_report(df, metrics: dict, run_dir: Path, run_id: str, input_path) -> Path:
-    """Write the machines run's markdown report."""
-    out = run_dir / "run_report.md"
-    type_counts = df[config.MAINTENANCE_TYPE_COLUMN].value_counts().to_dict()
-    type_lines = "\n".join(f"| `{k}` | {v} |" for k, v in type_counts.items()) or "| _(none)_ | 0 |"
-    n_linked = int(df[config.MAINTENANCE_INCIDENT_COLUMN].notna().sum())
-    mean_duration = round(float(df[config.MAINTENANCE_DURATION_COLUMN].mean()), 2)
-    n_components = int(df[config.MAINTENANCE_COMPONENT_COLUMN].nunique())
-    artifact_lines = "\n".join(f"- `{name}`" for name, _ in GRAPH_CATALOG)
-
-    content = f"""# Machines / maintenance run report — {run_id}
-
-- **Source**: `{input_path}`
-- **Run date**: {run_id[:4]}-{run_id[4:6]}-{run_id[6:8]} {run_id[8:10]}:{run_id[10:12]}
-- **Folder**: `{run_dir.as_posix()}`
-- **Reporting period**: {_reporting_period(df)}
-
-## Quality metrics
-
-| Metric | Value |
-|---|---|
-| Number of maintenance events | {metrics['n_rows']} |
-| Number of columns | {metrics['n_columns']} |
-| Unique machines | {metrics['unique_machines']} |
-| Missing values (total) | {metrics['n_missing_total']} |
-
-## Maintenance summary
-
-| Indicator | Value |
-|---|---|
-| Mean duration (hours) | {mean_duration} |
-| Distinct components | {n_components} |
-| Events linked to an incident | {n_linked} |
-
-### By type
-
-| Type | Count |
-|---|---|
-{type_lines}
-
-## Produced artifacts
-
-{artifact_lines}
-"""
-    out.write_text(content, encoding="utf-8")
-    logger.info("Report written: %s", out.name)
-    return out
-
-
-def update_registry(metrics: dict, run_id: str, run_dir: Path, period: str) -> None:
-    """Add (or update) the run entry in the machines ``runs_registry.json``."""
-    entry = {
-        "run_id": run_id,
-        "folder": run_dir.relative_to(config.PROJECT_ROOT).as_posix(),
-        "n_rows": metrics["n_rows"],
-        "n_columns": metrics["n_columns"],
-        "unique_machines": metrics["unique_machines"],
-        "n_missing_total": metrics["n_missing_total"],
-        "n_missing_per_column": metrics["n_missing_per_column"],
-        "reporting_period": period,
-    }
-    upsert_run(config.MACHINES_RUNS_REGISTRY_PATH, entry)
-
-
-def write_dataset_report(df, metrics: dict, run_dir: Path, run_id: str) -> Path:
-    """Write the shareable, business-friendly synthesis report for maintenance."""
-    type_counts = df[config.MAINTENANCE_TYPE_COLUMN].value_counts().to_dict()
-    return write_shared_report(
-        run_dir,
-        title="Machines / maintenance — synthesis report",
-        subtitle=f"Run `{run_id}` · shareable summary for business teams.",
-        indicators={
-            "Reporting period": _reporting_period(df),
-            "Maintenance events": metrics["n_rows"],
-            "Unique machines": metrics["unique_machines"],
-            "Proactive": type_counts.get("proactive", 0),
-            "Reactive": type_counts.get("reactive", 0),
-            "Mean duration (hours)": round(float(df[config.MAINTENANCE_DURATION_COLUMN].mean()), 2),
-            "Distinct components": int(df[config.MAINTENANCE_COMPONENT_COLUMN].nunique()),
-            "Linked to an incident": int(df[config.MAINTENANCE_INCIDENT_COLUMN].notna().sum()),
-        },
-        intro=(
-            "**How to read this report.** Each row is a maintenance event on a machine, "
-            "either *proactive* (scheduled) or *reactive* (after an incident). The graphs "
-            "show where maintenance effort concentrates — by machine, duration, type and "
-            "component."
-        ),
-        sections={"1. Maintenance overview": GRAPH_CATALOG},
-        notes=[
-            "Machines with many reactive maintenances are candidates for reinforced "
-            "preventive plans.",
-            "Components appearing most often (1.4) drive spare-parts and inspection " "priorities.",
-        ],
-    )
-
-
-def execute_run(input_path) -> Path:
-    """Run the machines pipeline and persist artifacts; return the run folder."""
-    run_id = datetime.now().strftime("%Y%m%d%H%M")
-    run_dir = config.MACHINES_ARTIFACTS_DIR / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    logger.info("Machines run %s — folder %s", run_id, run_dir)
-
-    engine = build_engine(input_path)
-    df = load_maintenance(engine)
-    metrics = compute_quality_metrics(df)
-
-    plots.plot_all(df, run_dir)
-    write_run_report(df, metrics, run_dir, run_id, input_path)
-    write_dataset_report(df, metrics, run_dir, run_id)
-    update_registry(metrics, run_id, run_dir, _reporting_period(df))
-
-    logger.info("Machines run %s completed successfully.", run_id)
-    return run_dir
-
-
-def run_default(input_path=None) -> Path:
-    """Uniform entry point used by the multi-source orchestrator (``run_all``)."""
-    return execute_run(input_path or config.DEFAULT_MACHINES_SQL)
-
-
-def load_dataframe(input_path=None):
-    """Return the maintenance DataFrame to be processed and stored."""
+def load_bronze(input_path=None):
+    """Raw maintenance DataFrame (machine_code renamed to machine_id)."""
     engine = build_engine(input_path or config.DEFAULT_MACHINES_SQL)
     return load_maintenance(engine)
+
+
+def to_silver(bronze_df):
+    """Declared processing on the bronze DataFrame."""
+    df, _ = apply_processing(bronze_df, _PROCESSING)
+    return df

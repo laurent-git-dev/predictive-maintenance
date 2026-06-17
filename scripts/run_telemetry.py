@@ -1,12 +1,9 @@
-"""CLI entry point for the telemetry ingestion pipeline.
+"""CLI entry point for the telemetry source (Bronze + Silver layers).
 
 Usage
 -----
-    uv run python scripts/run_telemetry.py --input data/raw/telemetry.csv
-
-Thin wrapper around :func:`src.sources.telemetry.runner.execute_run`: it parses
-the CLI arguments and configures a headless matplotlib backend. The orchestration
-lives in ``src/sources/telemetry/runner.py`` so it can be reused from notebooks.
+    uv run python scripts/run_telemetry.py
+    uv run python scripts/run_telemetry.py --no-db
 """
 
 from __future__ import annotations
@@ -16,20 +13,16 @@ import logging
 import sys
 from pathlib import Path
 
-# Make the `src` package importable regardless of the working directory.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Headless backend for the CLI (no display): set before pyplot is imported.
 import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
-from src import config  # noqa: E402
-from src.sources.telemetry.runner import execute_run  # noqa: E402
+from src.orchestrator import run_source_by_name  # noqa: E402
 
-# Readable accented logs in the Windows console (cp1252 by default).
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8")
@@ -41,22 +34,13 @@ logging.basicConfig(
 logger = logging.getLogger("run_telemetry")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Telemetry ingestion pipeline.")
-    parser.add_argument(
-        "--input",
-        type=Path,
-        default=config.DEFAULT_TELEMETRY_CSV,
-        help="Path to the source CSV (default: data/raw/telemetry.csv).",
-    )
-    return parser.parse_args()
-
-
 def main() -> int:
-    args = parse_args()
+    parser = argparse.ArgumentParser(description="Telemetry source (bronze + silver).")
+    parser.add_argument("--no-db", action="store_true", help="Skip the PostgreSQL load stage.")
+    args = parser.parse_args()
     try:
-        execute_run(args.input)
-    except FileNotFoundError as exc:
+        run_source_by_name("telemetry", load_db=not args.no_db)
+    except (FileNotFoundError, ValueError) as exc:
         logger.error("Run failed: %s", exc)
         return 1
     return 0

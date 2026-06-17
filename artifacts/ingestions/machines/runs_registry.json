@@ -1,16 +1,12 @@
 {
   "runs": [
     {
-      "run_id": "202606171538",
-      "folder": "artifacts/ingestions/machines/202606171538",
-      "n_rows": 115,
-      "n_columns": 9,
-      "unique_machines": 15,
-      "n_missing_total": 90,
-      "n_missing_per_column": {
-        "related_incident_id": 90
-      },
-      "reporting_period": "2025-06-15 → 2026-05-30"
+      "run_id": "202606172145",
+      "folder": "artifacts/ingestions/machines/202606172145",
+      "bronze_rows": 1562,
+      "silver_rows": 1562,
+      "bronze_db": "1562 rows -> bronze.maintenance",
+      "silver_db": "1562 rows -> silver.maintenance"
     }
   ]
 }
