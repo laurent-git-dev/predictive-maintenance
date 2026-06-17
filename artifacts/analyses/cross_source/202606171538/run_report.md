@@ -1,7 +1,7 @@
-# Cross-source analysis report — 202606162112
+# Cross-source analysis report — 202606171538
 
-- **Run date**: 2026-06-16 21:12
-- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/analyses/cross_source/202606162112`
+- **Run date**: 2026-06-17 15:38
+- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/analyses/cross_source/202606171538`
 - **Sources joined**: incidents · telemetry · machines (maintenance)
 
 ## Scope

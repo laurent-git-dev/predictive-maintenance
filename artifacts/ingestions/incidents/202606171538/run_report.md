@@ -1,8 +1,8 @@
-# Run report — 202606162112
+# Run report — 202606171538
 
 - **Source**: `Z:\formation_aelion\project\vs_code\data\raw\incidents.csv`
-- **Run date**: 2026-06-16 21:12
-- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/ingestions/incidents/202606162112`
+- **Run date**: 2026-06-17 15:38
+- **Folder**: `Z:/formation_aelion/project/vs_code/artifacts/ingestions/incidents/202606171538`
 
 ## Quality metrics (source data)
 

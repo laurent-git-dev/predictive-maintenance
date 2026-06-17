@@ -1,8 +1,8 @@
 {
   "runs": [
     {
-      "run_id": "202606162112",
-      "folder": "artifacts/ingestions/incidents/202606162112",
+      "run_id": "202606171538",
+      "folder": "artifacts/ingestions/incidents/202606171538",
       "n_rows": 900,
       "n_columns": 19,
       "unique_machines": 15,
