@@ -22,10 +22,15 @@ RUNS_REGISTRY_PATH: Path = ARTIFACTS_DIR / "runs_registry.json"
 ID_COLUMN: str = "incident_id"
 DATE_COLUMN: str = "date"
 TIME_COLUMN: str = "time"
+OPERATOR_NAME_COLUMN: str = "operator_name"
+OPERATOR_BADGE_COLUMN: str = "operator_badge"
 MACHINE_COLUMN: str = "machine_id"
 SEVERITY_COLUMN: str = "severity"
 SHIFT_COLUMN: str = "shift"
 COMMENT_COLUMN: str = "comment"
+
+# Free-text markers embedded in ``comment`` that denote a production stop.
+PRODUCTION_STOP_MARKERS: tuple[str, ...] = ("arrêt ligne", "coupure urgence", "arrêt d'urgence")
 
 # Columns holding personally identifiable information (PII).
 PII_COLUMNS: tuple[str, ...] = ("operator_name", "operator_badge", "comment")
@@ -48,7 +53,7 @@ EXPECTED_COLUMNS: tuple[str, ...] = (
     ID_COLUMN,
     DATE_COLUMN,
     TIME_COLUMN,
-    "operator_name",
+    OPERATOR_NAME_COLUMN,
     MACHINE_COLUMN,
     SEVERITY_COLUMN,
     "operator_badge",
@@ -81,13 +86,14 @@ DEFAULT_TELEMETRY_CSV: Path = DATA_RAW_DIR / "telemetry.csv"
 TELEMETRY_RUNS_REGISTRY_PATH: Path = TELEMETRY_ARTIFACTS_DIR / "runs_registry.json"
 
 TELEMETRY_TIMESTAMP_COLUMN: str = "timestamp"
+TELEMETRY_PIECES_COLUMN: str = "pieces_produced"
 # Numeric parameters measured per machine over time.
 TELEMETRY_PARAM_COLUMNS: tuple[str, ...] = (
     "temperature_c",
     "pressure_bar",
     "voltage_mean_v",
     "rotation_mean_rpm",
-    "pieces_produced",
+    TELEMETRY_PIECES_COLUMN,
 )
 TELEMETRY_EXPECTED_COLUMNS: tuple[str, ...] = (
     MACHINE_COLUMN,
@@ -98,18 +104,41 @@ TELEMETRY_EXPECTED_COLUMNS: tuple[str, ...] = (
 # ─── Machines / maintenance source ───────────────────────────────────────────
 # Third data source: PostgreSQL dump (machine referential + maintenance events),
 # loaded into a local SQLite database via SQLAlchemy ORM.
-MACHINES_ARTIFACTS_DIR: Path = PROJECT_ROOT / "artifacts" / "ingestions" / "machines"
+MACHINES_ARTIFACTS_DIR: Path = PROJECT_ROOT / "artifacts" / "ingestions" / "machines_maintenance"
 DEFAULT_MACHINES_SQL: Path = DATA_RAW_DIR / "machines.sql"
 MACHINES_RUNS_REGISTRY_PATH: Path = MACHINES_ARTIFACTS_DIR / "runs_registry.json"
 
 # Source key in the SQL is ``machine_code``; renamed to MACHINE_COLUMN on load
 # for consistency with the other sources (and future cross-source joins).
+MAINTENANCE_ID_COLUMN: str = "maintenance_id"
 MAINTENANCE_TIMESTAMP_COLUMN: str = "maintenance_at"
 MAINTENANCE_TYPE_COLUMN: str = "maintenance_type"
+MAINTENANCE_ACTION_COLUMN: str = "action_type"
 MAINTENANCE_COMPONENT_COLUMN: str = "component"
+MAINTENANCE_DESCRIPTION_COLUMN: str = "description"
 MAINTENANCE_DURATION_COLUMN: str = "duration_hours"
 MAINTENANCE_INCIDENT_COLUMN: str = "related_incident_id"
+
+# Machine referential (dimension) columns and helpers.
+MACHINE_TABLE: str = "machine"
 MACHINE_CRITICALITY_COLUMN: str = "criticality"
+MACHINE_MODEL_COLUMN: str = "model"
+MACHINE_LINE_COLUMN: str = "production_line"
+MACHINE_LOCATION_COLUMN: str = "location"
+MACHINE_COMMISSIONING_COLUMN: str = "commissioning_date"
+MACHINE_MAX_DAILY_COLUMN: str = "max_daily_capacity"
+MACHINE_MAX_HOURLY_COLUMN: str = "max_hourly_capacity_pieces"
+# Ordinal encoding for criticality (also defines the valid domain).
+CRITICALITY_ORDER: dict[str, int] = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
+# Machine attributes denormalised onto maintenance events in Silver.
+MACHINE_ENRICH_COLUMNS: tuple[str, ...] = (
+    MACHINE_CRITICALITY_COLUMN,
+    MACHINE_LINE_COLUMN,
+    MACHINE_LOCATION_COLUMN,
+    MACHINE_MODEL_COLUMN,
+    MACHINE_MAX_DAILY_COLUMN,
+    MACHINE_MAX_HOURLY_COLUMN,
+)
 
 # ─── Cross-source analyses ───────────────────────────────────────────────────
 # Analyses that combine several sources (joined on machine_id / incident_id).
@@ -131,3 +160,19 @@ DB_CONNECT_TIMEOUT_SECONDS: int = 3
 # Medallion layers → PostgreSQL schemas (1 table per source in each layer).
 BRONZE_SCHEMA: str = "bronze"
 SILVER_SCHEMA: str = "silver"
+
+# Display labels for the two sources sharing machines.sql (avoid machine/machines confusion).
+SOURCE_DISPLAY_NAMES: dict[str, str] = {
+    "machine": "machines/machine",
+    "machines": "machines/maintenance",
+}
+
+
+def source_artifacts_dirname(source: str) -> str:
+    """Filesystem-safe artifacts/registry folder name for a source.
+
+    Reuses ``SOURCE_DISPLAY_NAMES`` so the two ``machines.sql`` sources land in
+    ``machines_machine`` / ``machines_maintenance`` (and not the ambiguous
+    ``machine`` / ``machines``); other sources keep their own name.
+    """
+    return SOURCE_DISPLAY_NAMES.get(source, source).replace("/", "_")

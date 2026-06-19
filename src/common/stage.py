@@ -59,6 +59,14 @@ def run_layer(
     machine_col: str,
     table: str,
     schema: str,
+    count_features: list[str] = (),
+    count_label: str = "records",
+    keyword_bars: list[tuple[str, list[str], str]] = (),
+    heatmaps: list[tuple[str, str]] = (),
+    timeseries: list[tuple[str, str, str, str]] = (),
+    bars_by_machine: list[str] = (),
+    cumulative: list[tuple[str, str, str]] = (),
+    feature_plots: dict | None = None,
     engine=None,
 ) -> dict:
     """Produce a layer's per-feature understanding + reports, and load it to the DB.
@@ -70,7 +78,21 @@ def run_layer(
     logger.info("=== %s · %s layer ===", source, layer)
 
     metrics = compute_quality_metrics(df)
-    graphs, body = profiling.per_feature_understanding(df, numeric_features, stage_dir, machine_col)
+    graphs, body = profiling.per_feature_understanding(
+        df,
+        numeric_features,
+        stage_dir,
+        machine_col,
+        count_features,
+        count_label,
+        keyword_bars,
+        heatmaps,
+        timeseries,
+        bars_by_machine,
+        cumulative,
+        feature_plots,
+        source,
+    )
 
     write_dataset_report(
         stage_dir,

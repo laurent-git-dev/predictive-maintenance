@@ -16,7 +16,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "black>=26.5.1",
-    "ipykernel>=7.3.0",
+    "ipykernel>=6.29,<7",
     "ruff>=0.15.17",
 ]
 

@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 def _artifacts_base(source: str) -> Path:
-    return config.PROJECT_ROOT / "artifacts" / "ingestions" / source
+    dirname = config.source_artifacts_dirname(source)
+    return config.PROJECT_ROOT / "artifacts" / "ingestions" / dirname
 
 
 def run_source(spec: SourceSpec, engine=None) -> dict:
@@ -48,6 +49,14 @@ def run_source(spec: SourceSpec, engine=None) -> dict:
         machine_col=spec.machine_col,
         table=spec.table,
         schema=config.BRONZE_SCHEMA,
+        count_features=spec.count_features,
+        count_label=spec.count_label,
+        keyword_bars=spec.keyword_bars,
+        heatmaps=spec.heatmaps,
+        timeseries=spec.timeseries,
+        bars_by_machine=spec.bars_by_machine,
+        cumulative=spec.cumulative,
+        feature_plots=spec.feature_plots,
         engine=engine,
     )
 
@@ -61,6 +70,14 @@ def run_source(spec: SourceSpec, engine=None) -> dict:
         machine_col=spec.machine_col,
         table=spec.table,
         schema=config.SILVER_SCHEMA,
+        count_features=spec.count_features,
+        count_label=spec.count_label,
+        keyword_bars=spec.keyword_bars,
+        heatmaps=spec.heatmaps,
+        timeseries=spec.timeseries,
+        bars_by_machine=spec.bars_by_machine,
+        cumulative=spec.cumulative,
+        feature_plots=spec.feature_plots,
         engine=engine,
     )
 

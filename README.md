@@ -6,10 +6,17 @@ For each source in `data/raw/` (2 CSV + 1 SQL) it builds two layers:
 - **Bronze** — raw, typed data (operator PII pseudonymised on the way in);
 - **Silver** — processed data (feature engineering, encoding, imputation, outliers).
 
-Each layer produces the **same per-feature understanding** (reports + graphs) and is
-loaded into its own PostgreSQL schema (`bronze.*`, `silver.*`). A cross-source analysis
-runs at the end. Re-run everything with one command whenever the input data changes.
-(**Gold** is planned next, with the same mechanics.)
+Each layer produces the **same per-feature understanding** (reports + graphs + an
+**OK/NOK quality status** per feature) and is loaded into its own PostgreSQL schema
+(`bronze.*`, `silver.*`). A cross-source analysis runs at the end. Re-run everything with
+one command whenever the input data changes. (**Gold** is planned next, with the same
+mechanics.)
+
+**Four sources** are declared in the registry: `incidents`, `telemetry`, `machine` (the
+referential **dimension**) and `machines` (the **maintenance** facts); in Silver the
+maintenance facts are **enriched** with the machine dimension attributes (star schema).
+The exploration notebook is organised **by layer** (Bronze → Processing → Silver), each
+with a per-feature view, a per-source overview and inline analysis.
 
 ---
 
@@ -58,7 +65,7 @@ Per-source CLIs are still available (`scripts/run_{incidents,telemetry,machines}
 
 ---
 
-## 3a. Medallion layers & per-feature output
+## 3.1 Medallion layers & per-feature output
 
 Each per-source CLI builds **both layers** and writes them under
 `artifacts/ingestions/<source>/AAAAMMJJHHMM/{bronze,silver}/`:
@@ -67,32 +74,38 @@ Each per-source CLI builds **both layers** and writes them under
 uv run python scripts/run_incidents.py     # Bronze + Silver for incidents
 ```
 
-All sources/layers share the same **per-feature** output model: for each numeric
-feature, a boxplot across machines (`1.<i>_box_<feature>.png`) and a distribution
-(`2.<i>_dist_<feature>.png`); plus `run_report.md` (technical) and `dataset_report.md`
-(shareable per-feature profile, synthesis adapted to each column's type). Each run
-updates the source's `runs_registry.json`.
+All sources/layers share the same **per-feature** output model: every column gets a
+type-aware synthesis and an **OK/NOK status** (green/red badge), plus type-specific
+graphs. `run_report.md` is the technical report; `dataset_report.md` is the shareable
+per-feature profile. Each run updates the source's `runs_registry.json`.
 
 | File (per layer) | Description |
 |---|---|
 | `<source>.csv` | Layer dataset (gitignored; versionable via DVC) |
-| `1.<i>_box_<feature>.png` | Boxplot of a numeric feature across machines |
-| `2.<i>_dist_<feature>.png` | Distribution (histogram + density/KDE) of a feature |
+| `1.<i>_box_<feature>.png` | Boxplot of a numeric feature across machines (if a machine column is present) |
+| `2.<i>_dist_<feature>.png` | Distribution (histogram + density/KDE) of a numeric feature |
+| `3.<i>_count_<feature>.png` | Count per category (`COUNT_FEATURES` hook) |
+| `4.<i>_kw_<feature>.png` | Keyword breakdown in free text (`KEYWORD_BARS` hook) |
+| `5.<i>_heat_<row>_<col>.png` | Row-normalised crosstab heatmap (`HEATMAPS` hook) |
+| `6.<i>_ts_<feature>.png` | Per-machine time series (`TIMESERIES` hook) |
 | `run_report.md` | Technical layer report (metrics + missing per column) |
-| `dataset_report.md` | Shareable per-feature synthesis report |
+| `dataset_report.md` | Shareable per-feature synthesis (synthesis + status + graphs) |
 
-Numeric features per layer: **incidents** — Bronze `severity`; Silver `severity`,
-`n_active_signals`, `confidence_index`. **telemetry** — the 5 parameters (Bronze = Silver).
-**machines** — `duration_hours` (Bronze = Silver).
+The type-aware synthesis covers: numeric (range, quartiles, mean/std/skew, an **outlier
+table** by IQR and z-score), boolean (0/1 shares), ordinal (light), datetime (range; a
+per-machine QC table for hourly series). **Quality status** criteria are declared in
+`src/common/quality.py` (`FEATURE_CHECKS` by feature name, `SOURCE_FEATURE_CHECKS` scoped
+to a source — e.g. `machine_id` is a primary key only in the `machine` dimension).
 
 DB tables: `{bronze,silver}.incidents`, `{bronze,silver}.telemetry`,
-`{bronze,silver}.maintenance`.
+`{bronze,silver}.machine` (dimension) and `{bronze,silver}.maintenance` (facts, Silver
+enriched with the machine attributes).
 
 > **Signals** are the columns prefixed by `type_` (binary 0/1 anomaly flags).
 
 ---
 
-## 3b. Telemetry source
+## 3.2 Telemetry source
 
 A second data source: hourly machine **telemetry** (no PII). Drop the CSV into
 `data/raw/telemetry.csv`, then:
@@ -103,27 +116,37 @@ uv run python scripts/run_telemetry.py
 
 Columns: `machine_id, timestamp, temperature_c, pressure_bar, voltage_mean_v,
 rotation_mean_rpm, pieces_produced`. Bronze = raw load; Silver = median imputation +
-IQR outlier treatment on the 5 parameters.
+IQR outlier treatment on the 5 parameters. Extra hooks: a per-machine `TIMESERIES`
+(daily/weekly piece production) and a source `OVERVIEW` (measures over time); `timestamp`
+is checked for per-machine duplicates and missing hourly slots.
 
 ---
 
-## 3c. Machines / maintenance source (SQL)
+## 3.3 Machines source (SQL): `machine` dimension + `maintenance` facts
 
-A third source: a **PostgreSQL dump** (`data/raw/machines.sql`) with a `machine`
-referential and a `maintenance` events table. It is loaded into a local **SQLite**
-database via **SQLAlchemy ORM** (no PostgreSQL server needed), then read into
-pandas.
+The third input is a **PostgreSQL dump** (`data/raw/machines.sql`) with two tables,
+loaded into a local **SQLite** database via **SQLAlchemy ORM** (no PostgreSQL server
+needed) and read into pandas. It yields **two medallion sources**:
 
 ```bash
-uv run python scripts/run_machines.py
+uv run python scripts/run_machines.py   # the maintenance (facts) source
 ```
 
-Bronze = raw maintenance events; Silver = encoding (`maintenance_type`, `component`)
-+ IQR outlier treatment on `duration_hours`.
+- **`maintenance`** facts (source `machines`; notebook **Machines/maintenance**):
+  Bronze = raw events; Silver = encoding (`maintenance_type`, `component`) + IQR outlier
+  treatment on `duration_hours`, then **enriched** by joining the machine dimension
+  attributes on `machine_id` (`criticality`, `production_line`, `location`, `model`,
+  capacities).
+- **`machine`** dimension / referential (source `machine`; notebook **Machines/machine**;
+  one row per machine): the **Bronze layer verifies coherence** (status: `machine_id`
+  primary key — no missing, **no duplicate** —, `criticality` ∈ {LOW, MEDIUM, HIGH},
+  positive capacities, commissioning date not in the future). Silver encodes `criticality`.
+  Being a dimension, it has no per-machine boxplot; it shows capacity distributions and
+  category counts. It is run by the full pipeline (`run_pipeline.py`).
 
 ---
 
-## 3d. Cross-source analysis
+## 3.4 Cross-source analysis
 
 Cross-source analyses combine the sources (joined on `machine_id` /
 `incident_id`). They live in `src/analyses/` and reuse the source loaders.

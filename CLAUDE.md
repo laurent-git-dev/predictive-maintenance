@@ -55,30 +55,50 @@ predictive_maintenance/
 ├── src/
 │   ├── config.py           ← chemins, schémas, réglages DB, BRONZE/SILVER_SCHEMA
 │   ├── orchestrator.py     ← run_pipeline : Bronze→Silver × chaque source + cross-source
-│   ├── common/             ← partagé : metrics, registry, reporting, env, profiling,
+│   ├── common/             ← partagé : metrics, registry, reporting, env,
+│   │                          profiling (compréhension per-feature + graphes + status),
+│   │                          quality (critères OK/NOK par feature), processing_summary
+│   │                          (résumé Bronze→Silver), overview (stub global par couche),
 │   │                          stage (run_layer : compréhension + rapports + mise en base)
 │   ├── processing/         ← OUTILS MUTUALISÉS : anonymization, transformation,
 │   │                          imputation, outliers, pipeline (apply_processing)
 │   ├── database/           ← engine (PostgreSQL, ensure_schema) + loader (to_sql par schéma)
-│   ├── sources/            ← 1 package/source (runner MINCE : load_bronze/to_silver/numeric)
-│   │   ├── registry.py     ← SOURCE_SPECS (load_bronze, to_silver, numeric, table)
-│   │   ├── incidents/ telemetry/ machines/
+│   ├── sources/            ← 1 package/source (runner MINCE : load_bronze/to_silver + hooks)
+│   │   ├── registry.py     ← SOURCE_SPECS (déclaratif : load_bronze/to_silver/numeric/table
+│   │   │                      + hooks count/keyword/heatmap/timeseries/overview/processing)
+│   │   ├── incidents/ telemetry/ machines/   (+ overview.py par source ; machines :
+│   │   │                      runner=maintenance + referential_runner=dimension machine)
 │   └── analyses/           ← analyses inter-sources (joins, plots, runner)
 ├── scripts/
 │   ├── run_pipeline.py     ← ORCHESTRATEUR : tout, toutes sources, Bronze+Silver (commande unique)
 │   └── run_{incidents,telemetry,machines,cross_source}.py ← par source/analyse
 └── notebooks/
-    └── pipeline.ipynb      ← notebook UNIQUE, toutes les phases (non DVC)
+    └── pipeline.ipynb      ← notebook UNIQUE, organisé PAR COUCHE (non DVC)
 ```
 
 > **Architecture médaillon** : pour chaque source, **Bronze** (données brutes ;
 > `operator_name`/`operator_badge` pseudonymisés dès le Bronze) puis **Silver**
 > (traitement : feature engineering, encodage, imputation, outliers). Chaque couche
-> produit la **même compréhension per-feature** (synthèse adaptée au type + boxplot/
-> distribution) et une **table** dans son schéma PostgreSQL (`bronze.*`, `silver.*`).
-> **Gold** viendra ensuite (même mécanique). Tout est **mutualisé** dans `src/common/`
-> (`stage.run_layer`, `profiling`) ; les runners de source sont **minces** (`load_bronze`,
-> `to_silver`, `BRONZE_NUMERIC`/`SILVER_NUMERIC`). Orchestrateur : `src/orchestrator.py`.
+> produit la **même compréhension per-feature** (synthèse adaptée au type + **status
+> OK/NOK** par feature + graphes) et une **table** dans son schéma PostgreSQL
+> (`bronze.*`, `silver.*`). **Gold** viendra ensuite (même mécanique). Tout est
+> **mutualisé** dans `src/common/` (`stage.run_layer`, `profiling`, `quality`) ; les
+> runners de source sont **minces** : ils déclarent `load_bronze`, `to_silver`,
+> `BRONZE_NUMERIC`/`SILVER_NUMERIC` et des **hooks graphiques optionnels** (voir
+> « Ajouter une source »). Orchestrateur : `src/orchestrator.py`.
+>
+> **4 sources** sont déclarées dans `SOURCE_SPECS` : `incidents`, `telemetry`,
+> `machine` (dimension/référentiel ; titres notebook *Machines/machine*) et `machines`
+> (faits de maintenance ; titres notebook *Machines/maintenance*). En Silver,
+> `maintenance` est **enrichie** des attributs de la dimension `machine` (star schema).
+>
+> **Notebook organisé par couche, titres numérotés & repliables** (niveaux : `##` phase
+> → `###` source → `####` sous-section → `#####` feature) : `## 1. Bronze (raw)` →
+> `## 2. Processing Bronze → Silver` → `## 3. Silver (treated)` → `## 4. Database` →
+> `## 5. Cross-source`. Chaque source d'une couche se décline en sous-sections
+> **« … - Per feature »**, **« … - Overview »** et (Bronze) **« … - Inline analysis »**
+> (graphes exploratoires **propres au notebook** : ni dans `src/`, ni dans les rapports) ;
+> chaque couche se termine par **« <Couche> - Global overview »**.
 
 ---
 
@@ -142,6 +162,10 @@ Chaque run crée `artifacts/ingestions/<source>/AAAAMMJJHHMM/{bronze,silver}/`
 (graphes per-feature, `run_report.md`, `dataset_report.md`, `<source>.csv`) et met à
 jour le `runs_registry.json` de la source (lignes Bronze/Silver + statut base).
 
+> `<source>` est le **nom de dossier** renvoyé par `config.source_artifacts_dirname` :
+> identique au nom de source pour `incidents`/`telemetry`, mais désambiguïsé pour les deux
+> sources `machines.sql` → `machines_machine` (dimension) et `machines_maintenance` (faits).
+
 ### Base de données (PostgreSQL / Docker)
 
 ```bash
@@ -151,8 +175,10 @@ docker compose stop         # arrête (les données persistent dans le volume pg
 ```
 Chaque source produit **deux tables** : `bronze.<table>` (brut, opérateurs
 pseudonymisés) et `silver.<table>` (après traitement), où `<table>` ∈
-{`incidents`, `telemetry`, `maintenance`}. Les schémas `bronze`/`silver` sont créés
-au besoin (`CREATE SCHEMA IF NOT EXISTS`) et les tables **rechargées entièrement**
+{`incidents`, `telemetry`, `machine`, `maintenance`}. `silver.maintenance` est en plus
+**enrichie** des attributs de la dimension `machine` (criticité, ligne, atelier, modèle,
+capacités). Les schémas `bronze`/`silver` sont créés au besoin
+(`CREATE SCHEMA IF NOT EXISTS`) et les tables **rechargées entièrement**
 (`to_sql` replace) à chaque run → idempotent.
 
 ### DVC — versioning des données
@@ -254,12 +280,19 @@ et dans les analyses.
 
 À chaque run, **chaque couche** (`bronze/`, `silver/`) produit les mêmes artefacts.
 
-**Modèle « per-feature » (uniforme pour toutes les sources)** : pour chaque
-**feature numérique**, un boxplot par machine et une distribution (histogramme +
-densité/KDE). La synthèse par colonne, **adaptée au type** (uniques, % manquants ;
-numérique : min/Q1/médiane/Q3/max + plage + écart-type + skew + outliers IQR ;
-datetime : plage temporelle ; catégoriel : mode ; booléen : % True), est dans
-`dataset_report.md`.
+**Modèle « per-feature » (uniforme pour toutes les sources)** : pour **chaque colonne**,
+un **status OK/NOK** (badge vert/rouge accolé au titre, cf. « Status & qualité ») et une
+**synthèse adaptée au type** :
+- **numérique continu** : count/unique/missing ; plage min→max + Q1/médiane/Q3 ;
+  mean/std/skew ; **tableau outliers** (méthodes IQR k=1.5 **et** z-score k=3, avec bornes
+  et plages des valeurs atypiques) ;
+- **ordinal** (ex. `severity`) : synthèse allégée (plage seule) ;
+- **booléen** (signaux `type_*`, flags 0/1) : pas de stats numériques, % par valeur 0/1 ;
+- **datetime** : plage temporelle ; pour une série horaire par machine (ex. `timestamp`),
+  **tableau QC par machine** (doublons + heures manquantes) ;
+- **catégoriel** : valeur la plus fréquente (ou plage si heure `HH:MM`).
+
+Graphes (préfixe = type, `<i>` = index dans la liste) :
 
 ```
 artifacts/ingestions/<source>/<run>/{bronze,silver}/
@@ -268,18 +301,49 @@ artifacts/ingestions/<source>/<run>/{bronze,silver}/
 | Fichier (par couche) | Description |
 |---|---|
 | `<source>.csv` | Dataset de la couche (gitignoré ; versionnable via DVC) |
-| `1.<i>_box_<feature>.png` | Boxplot d'une feature numérique par machine |
-| `2.<i>_dist_<feature>.png` | Distribution (histogramme + densité/KDE) d'une feature |
+| `1.<i>_box_<feature>.png` | Boxplot d'une feature numérique par machine (si `machine_col` présent) |
+| `2.<i>_dist_<feature>.png` | Distribution (histogramme + densité/KDE) d'une feature numérique |
+| `3.<i>_count_<feature>.png` | Comptage par catégorie (hook `COUNT_FEATURES`) ; horizontal si > 20 modalités |
+| `4.<i>_kw_<feature>.png` | Détail par mot-clé dans du texte libre (hook `KEYWORD_BARS`) |
+| `5.<i>_heat_<row>_<col>.png` | Heatmap crosstab normalisée par ligne (hook `HEATMAPS`) |
+| `6.<i>_ts_<feature>.png` | Série temporelle par machine (hook `TIMESERIES`) |
 | `run_report.md` | Rapport technique de la couche (métriques + manquants/colonne) |
-| `dataset_report.md` | Rapport partageable : profil **per-feature** (synthèse + graphes) |
+| `dataset_report.md` | Rapport partageable : profil **per-feature** (synthèse + status + graphes) |
 
-> Features numériques par source et couche : **incidents** — Bronze = `severity` ;
-> Silver = `severity`, `n_active_signals`, `confidence_index`. **telemetry** — les 5
-> paramètres (Bronze = Silver). **machines** — `duration_hours` (Bronze = Silver).
-> La synthèse couvre **toutes** les colonnes.
+> Features numériques par source et couche : **incidents** — Bronze = ∅ (`severity` n'a
+> qu'un graphe de comptage) ; Silver = `n_active_signals`, `confidence_index`.
+> **telemetry** — les 5 paramètres (Bronze = Silver). **machines** (maintenance) —
+> `duration_hours`. **machine** (dimension) — `max_daily_capacity`,
+> `max_hourly_capacity_pieces` (pas de boxplot par machine : 1 ligne/machine). La synthèse
+> couvre **toutes** les colonnes.
 
 Le registre `runs_registry.json` est mis à jour automatiquement (lignes Bronze/Silver
 + statut de mise en base par schéma).
+
+---
+
+## Status & qualité par feature (OK/NOK)
+
+Chaque feature peut déclarer des **critères de qualité** ; le profilage affiche un **status
+OK (vert) / NOK (rouge)** à côté du titre, et, si NOK, une ligne listant les critères
+échoués. Tout est centralisé dans **`src/common/quality.py`** :
+
+- `FEATURE_CHECKS: dict[str, list[Check]]` — critères **par nom de feature** (s'appliquent
+  à toutes les sources/couches). Un `Check` = un libellé + un prédicat sur
+  `(profile, series, df)` (le DataFrame permet les contrôles **inter-colonnes**).
+- `SOURCE_FEATURE_CHECKS: dict[(source, feature), list[Check]]` — critères **scopés à une
+  source** (s'ajoutent aux globaux). Ex. : `machine_id` est une **clé primaire** (pas de
+  doublon) **uniquement** dans la dimension `machine`, alors qu'il se répète légitimement
+  ailleurs.
+
+Critères réutilisables : `NO_MISSING`, `NO_DUPLICATES`, `VALID_DATE_FORMAT`,
+`VALID_TIME_FORMAT`, `UNIQUE_PER_MACHINE` / `NO_MISSING_HOURS` (séries horaires),
+`IN_CRITICALITY_DOMAIN`, `STRICTLY_POSITIVE`, `NOT_IN_FUTURE`,
+`SAME_DISTINCT_AS_OPERATOR_NAME`. Réglages d'affichage associés : `ORDINAL_FEATURES`
+(synthèse allégée) et `HOURLY_PER_MACHINE_FEATURES` (tableau QC).
+
+> Le status reflète les données **de la couche** : une même feature peut être NOK en
+> Bronze (ex. valeurs manquantes) puis OK en Silver (après imputation).
 
 ---
 
@@ -309,20 +373,25 @@ uv run python scripts/run_telemetry.py
 Artefacts produits dans `artifacts/ingestions/telemetry/AAAAMMJJHHMM/{bronze,silver}/`,
 modèle **per-feature** (voir « Artefacts attendus »). Pas de PII : Bronze = `load_telemetry`,
 Silver = imputation (médiane) + traitement des outliers (IQR) sur les 5 paramètres.
+Hooks déclarés : `TIMESERIES` (production journalière/hebdomadaire par machine sur
+`pieces_produced`) et `OVERVIEW` (`src/sources/telemetry/overview.py` : évolution des 4
+mesures physiques dans le temps). `timestamp` porte les critères `UNIQUE_PER_MACHINE` +
+`NO_MISSING_HOURS` (tableau QC par machine).
 
 Registre dédié : `artifacts/ingestions/telemetry/runs_registry.json`.
 Tables : `bronze.telemetry`, `silver.telemetry`.
 
 ---
 
-## Source 3 — Machines / maintenance (SQL)
+## Source 3 — Machines / maintenance (SQL) — **2 sources** : fait + dimension
 
-Troisième source : **dump PostgreSQL** (`data/raw/machines.sql`) avec deux tables :
-- **`machine`** — référentiel (modèle, ligne, atelier, criticité, capacités, date
-  de mise en service) ;
-- **`maintenance`** — événements (`machine_code`, `maintenance_at`, `maintenance_type`
-  *proactive/reactive*, `action_type`, `component`, `description`,
-  `related_incident_id`, `duration_hours`).
+Troisième fichier d'entrée : **dump PostgreSQL** (`data/raw/machines.sql`) avec deux
+tables qui donnent **deux sources médaillon** :
+- **`maintenance`** — table de **faits** : événements (`machine_code`, `maintenance_at`,
+  `maintenance_type` *proactive/reactive*, `action_type`, `component`, `description`,
+  `related_incident_id`, `duration_hours`). Source `machines`.
+- **`machine`** — **dimension/référentiel** (modèle, ligne, atelier, criticité, capacités,
+  date de mise en service ; 1 ligne/machine). Source `machine`.
 
 **Accès** : le dump est chargé dans une base **SQLite locale** via **SQLAlchemy ORM**
 (modèles `Machine` / `Maintenance` dans `src/sources/machines/models.py` = schéma
@@ -331,16 +400,27 @@ non portable (`NOW()`, `ON CONFLICT`) est neutralisée au chargement. À la lect
 `machine_code` est renommé `machine_id` (cohérence inter-sources / jointures).
 
 ```bash
-uv run python scripts/run_machines.py
+uv run python scripts/run_machines.py   # lance la source maintenance (la dimension passe par run_pipeline)
 ```
 
-Artefacts dans `artifacts/ingestions/machines/AAAAMMJJHHMM/{bronze,silver}/`, modèle
-**per-feature** (`1.1_box_duration_hours.png`, `2.1_dist_duration_hours.png`,
-`run_report.md`, `dataset_report.md`). Silver = encodage (`maintenance_type`,
-`component`) + traitement des outliers (IQR) sur `duration_hours`.
+**Source `machines` (maintenance, faits ; notebook : *Machines/maintenance*)** — runner `src/sources/machines/runner.py` :
+Silver = encodage (`maintenance_type`, `component`) + outliers (IQR) sur `duration_hours`
++ **enrichissement** par jointure `machine_id` des attributs de la dimension
+(`criticality`, `production_line`, `location`, `model`, capacités). Numérique : `duration_hours`.
+Tables : `bronze.maintenance`, `silver.maintenance` (enrichie).
 
-Registre dédié : `artifacts/ingestions/machines/runs_registry.json`.
-Tables : `bronze.maintenance`, `silver.maintenance`.
+**Source `machine` (dimension ; notebook : *Machines/machine*)** — runner `src/sources/machines/referential_runner.py` :
+le **Bronze vérifie la cohérence** du référentiel (status : `machine_id` PK = pas de vide
++ **pas de doublon** *(critère scopé à cette source)* ; `criticality` ∈ {LOW, MEDIUM, HIGH} ;
+capacités > 0 ; `commissioning_date` non future). Silver = encodage `criticality` →
+`criticality_code`. C'est une dimension (1 ligne/machine) → **pas de boxplot par machine**
+(`MACHINE_COL = ""`) : distributions des capacités + comptages (`criticality`, `model`,
+`production_line`, `location`). Tables : `bronze.machine`, `silver.machine`.
+
+Registre dédié : `artifacts/ingestions/{machines_maintenance,machines_machine}/runs_registry.json`
+(les deux sources `machines.sql` écrivent dans des dossiers **désambiguïsés** : `machines`
+→ `machines_maintenance`, `machine` → `machines_machine` ; mapping dans
+`config.source_artifacts_dirname`, dérivé de `SOURCE_DISPLAY_NAMES`).
 
 ---
 
@@ -390,26 +470,37 @@ compréhension per-feature, rapports, mise en base — est mutualisée dans
 2. **`src/sources/<nom>/`** :
    - `loader.py` : `load_<nom>()` (lecture, validation, typage **brut** — pas de
      traitement) ;
-   - `runner.py` (**mince**) exposant :
+   - `runner.py` (**mince**) exposant **au minimum** :
      - `SOURCE_NAME`, `TABLE` (nom de table PostgreSQL) ;
      - `BRONZE_NUMERIC` / `SILVER_NUMERIC` (features numériques à grapher par couche) ;
      - `load_bronze(input_path=None) -> df` : brut typé (+ `pseudonymise_operators`
        si PII opérateurs, via `src.processing.anonymization`) ;
      - `to_silver(bronze_df) -> df` : feature engineering + `apply_processing(...)`
-       (`src.processing` : encodage / imputation / outliers **déjà existants**).
+       (`src.processing` : encodage / imputation / outliers **déjà existants**) ;
+   - **hooks optionnels** (lus par `getattr` dans `_spec`, donc facultatifs) :
+     `COUNT_FEATURES`/`COUNT_LABEL` (barres de comptage), `KEYWORD_BARS`
+     `(feature, mots-clés, titre)`, `HEATMAPS` `(row, col)`, `TIMESERIES`
+     `(value, time, titre, freq)`, `OVERVIEW` (fonction `plots(df, out)->list[Path]`,
+     typiquement dans `overview.py`), `FEATURE_PLOTS` (`dict {feature: fn(df, out)->list[Path]}` :
+     graphe(s) **rattaché(s) à une feature** dans la compréhension per-feature, ex. cohérence des
+     capacités sous `max_hourly_capacity_pieces`), `MACHINE_COL` (override ; `""` pour désactiver le
+     boxplot par machine sur une dimension), `PROCESSING` (la `ProcessingConfig`).
 3. **Aucun traitement en Bronze** (sauf pseudonymisation PII opérateurs). Tout le
    reste (encodage texte→valeur, imputation, outliers, features dérivées) est en
    **Silver** via `to_silver`, en réutilisant `src.processing`.
 4. **Enregistrer la source dans `src/sources/registry.py`** (`SOURCE_SPECS`) via
-   `_spec(<nom>_runner)` : `name`, `load_bronze`, `to_silver`, `bronze_numeric`,
-   `silver_numeric`, `table`, `machine_col`. → l'orchestrateur (`run_pipeline`) la
-   prend automatiquement en charge (Bronze + Silver + mise en base par schéma).
-5. **`scripts/run_<nom>.py`** : wrapper CLI minimal (`run_source_by_name("<nom>")`,
+   `_spec(<nom>_runner)`. → l'orchestrateur (`run_pipeline`) la prend automatiquement
+   en charge (Bronze + Silver + mise en base par schéma).
+5. **Qualité (optionnel mais recommandé)** : déclarer les critères de status dans
+   `src/common/quality.py` — `FEATURE_CHECKS` (par nom de feature) ou
+   `SOURCE_FEATURE_CHECKS` (scopé `(source, feature)`), en réutilisant les `Check`
+   existants ou en ajoutant un prédicat `(profile, series, df) -> bool`.
+6. **`scripts/run_<nom>.py`** : wrapper CLI minimal (`run_source_by_name("<nom>")`,
    fixe le backend `Agg`, option `--no-db`).
-6. **Notebook** : ajouter une sous-section dans `notebooks/pipeline.ipynb` (couches
-   **Bronze** puis **Silver** : `load_bronze()` puis `to_silver()`, profilées via
-   `show_per_feature`).
-7. **Documenter** dans `CLAUDE.md` et `README.md`.
+7. **Notebook** (organisé **par couche**) : ajouter la source dans **les trois phases**
+   `## 1. Bronze` / `## 2. Processing` / `## 3. Silver` (markdown `### <Source> - …` +
+   cellule `show_per_feature_spec(SPECS["<nom>"], …)` / `show_processing(...)`).
+8. **Documenter** dans `CLAUDE.md` et `README.md`.
 
 > Rappel : **chaque couche produit `run_report.md` ET `dataset_report.md`** (per-feature).
 > La mise en base utilise `to_sql` replace par schéma (`bronze.*` / `silver.*`,

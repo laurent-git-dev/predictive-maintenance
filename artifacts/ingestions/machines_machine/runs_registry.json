@@ -1,0 +1,12 @@
+{
+  "runs": [
+    {
+      "run_id": "202606191449",
+      "folder": "artifacts/ingestions/machines_machine/202606191449",
+      "bronze_rows": 15,
+      "silver_rows": 15,
+      "bronze_db": "15 rows -> bronze.machine",
+      "silver_db": "15 rows -> silver.machine"
+    }
+  ]
+}
