@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 
 from src import config
-from src.processing.pipeline import ProcessingConfig, apply_processing
+from src.processing.pipeline import ProcessingConfig
 from src.sources.machines import overview
 from src.sources.machines.loader import build_engine, load_machine_referential
 
@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "machine"
 TABLE = config.MACHINE_TABLE
+# Dimension consumed only as a Bronze referential: its attributes are denormalised into
+# silver.maintenance (merge-first star schema), so it has no standalone Silver table.
+BRONZE_ONLY = True
 # Dimension: one row per machine -> no per-machine boxplot (no grouping column).
 MACHINE_COL = ""
 # Capacities are shown as a bar per machine (descending), not a distribution.
@@ -38,11 +41,9 @@ COUNT_LABEL = "machines"
 # Extra per-feature plot: capacity coherence (hourly vs daily) under max_hourly_capacity_pieces.
 FEATURE_PLOTS = {config.MACHINE_MAX_HOURLY_COLUMN: overview.plot_capacity_coherence}
 
-PROCESSING = ProcessingConfig(
-    encode={config.MACHINE_CRITICALITY_COLUMN: config.CRITICALITY_ORDER},
-    impute={},
-    outliers=[],
-)
+# Bronze-only: no Silver processing here. The dimension's encodings (criticality, ...) are
+# applied where it is consumed — denormalised into silver.maintenance.
+PROCESSING = ProcessingConfig()
 
 
 def load_bronze(input_path=None):
@@ -52,6 +53,5 @@ def load_bronze(input_path=None):
 
 
 def to_silver(bronze_df):
-    """Cleaned dimension: encode criticality to an ordinal ``criticality_code``."""
-    df, _ = apply_processing(bronze_df, PROCESSING)
-    return df
+    """Bronze-only source: no standalone Silver table (kept for contract). ``(df, report)``."""
+    return bronze_df, {}

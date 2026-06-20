@@ -60,7 +60,22 @@ def run_source(spec: SourceSpec, engine=None) -> dict:
         engine=engine,
     )
 
-    silver_df = spec.to_silver(bronze_df)
+    if spec.bronze_only:
+        # Bronze-only source (e.g. the machine dimension): no standalone Silver table.
+        upsert_run(
+            base / "runs_registry.json",
+            {
+                "run_id": run_id,
+                "folder": run_dir.relative_to(config.PROJECT_ROOT).as_posix(),
+                "bronze_rows": bronze["rows"],
+                "silver_rows": None,
+                "bronze_db": bronze["db"],
+                "silver_db": "n/a (bronze-only source)",
+            },
+        )
+        return {"run_dir": str(run_dir), "bronze": bronze, "silver": None}
+
+    silver_df, report = spec.to_silver(bronze_df)
     silver = run_layer(
         silver_df,
         source=spec.name,
@@ -78,6 +93,7 @@ def run_source(spec: SourceSpec, engine=None) -> dict:
         bars_by_machine=spec.bars_by_machine,
         cumulative=spec.cumulative,
         feature_plots=spec.feature_plots,
+        encodings=report.get("encode"),
         engine=engine,
     )
 

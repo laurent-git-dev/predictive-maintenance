@@ -23,10 +23,11 @@ class SourceSpec:
 
     name: str
     load_bronze: Callable[[], object]
-    to_silver: Callable[[object], object]
+    to_silver: Callable[[object], tuple]
     bronze_numeric: list[str]
     silver_numeric: list[str]
     table: str
+    bronze_only: bool = False
     machine_col: str = field(default=config.MACHINE_COLUMN)
     count_features: list[str] = field(default_factory=list)
     count_label: str = "records"
@@ -48,6 +49,7 @@ def _spec(runner) -> SourceSpec:
         bronze_numeric=runner.BRONZE_NUMERIC,
         silver_numeric=runner.SILVER_NUMERIC,
         table=runner.TABLE,
+        bronze_only=getattr(runner, "BRONZE_ONLY", False),
         machine_col=getattr(runner, "MACHINE_COL", config.MACHINE_COLUMN),
         count_features=getattr(runner, "COUNT_FEATURES", []),
         count_label=getattr(runner, "COUNT_LABEL", "records"),

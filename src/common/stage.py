@@ -6,6 +6,7 @@ is uniform. Sources only provide the DataFrame and the numeric features to graph
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -67,6 +68,7 @@ def run_layer(
     bars_by_machine: list[str] = (),
     cumulative: list[tuple[str, str, str]] = (),
     feature_plots: dict | None = None,
+    encodings: dict | None = None,
     engine=None,
 ) -> dict:
     """Produce a layer's per-feature understanding + reports, and load it to the DB.
@@ -119,6 +121,13 @@ def run_layer(
         ],
     )
     _write_run_report(df, metrics, stage_dir, source, layer, graphs)
+
+    if encodings:
+        # Text -> value traceability: actual value->code mappings applied this layer.
+        payload = {col: info["mapping"] for col, info in encodings.items()}
+        (stage_dir / "text_encodings.json").write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
 
     df.to_csv(stage_dir / f"{source}.csv", index=False, encoding=config.CSV_ENCODING)
 

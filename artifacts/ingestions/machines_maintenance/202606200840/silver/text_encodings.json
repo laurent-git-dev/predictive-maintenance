@@ -1,0 +1,46 @@
+{
+  "maintenance_type": {
+    "proactive": 0,
+    "reactive": 1
+  },
+  "action_type": {
+    "changement_programme": 0,
+    "changement_suite_panne": 1,
+    "intervention_corrective": 2
+  },
+  "component": {
+    "capteur pression": 0,
+    "capteur température": 1,
+    "convoyeur sortie": 2,
+    "courroie moteur": 3,
+    "filtre hydraulique": 4,
+    "joint hydraulique": 5,
+    "outillage presse": 6,
+    "relais sécurité": 7,
+    "roulement axe principal": 8,
+    "système sécurité": 9,
+    "transmission": 10,
+    "variateur vitesse": 11
+  },
+  "criticality": {
+    "LOW": 0,
+    "MEDIUM": 1,
+    "HIGH": 2
+  },
+  "production_line": {
+    "Ligne-A": 0,
+    "Ligne-B": 1,
+    "Ligne-C": 2
+  },
+  "location": {
+    "Atelier-1": 0,
+    "Atelier-2": 1,
+    "Atelier-3": 2
+  },
+  "model": {
+    "InduPress-X1": 0,
+    "InduPress-X2": 1,
+    "InduPress-X3": 2,
+    "InduPress-Z1": 3
+  }
+}

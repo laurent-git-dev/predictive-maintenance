@@ -1,12 +1,12 @@
 {
   "runs": [
     {
-      "run_id": "202606191448",
-      "folder": "artifacts/ingestions/telemetry/202606191448",
+      "run_id": "202606200839",
+      "folder": "artifacts/ingestions/telemetry/202606200839",
       "bronze_rows": 135626,
-      "silver_rows": 135626,
+      "silver_rows": 134280,
       "bronze_db": "135626 rows -> bronze.telemetry",
-      "silver_db": "135626 rows -> silver.telemetry"
+      "silver_db": "134280 rows -> silver.telemetry"
     }
   ]
 }

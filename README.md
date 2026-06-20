@@ -12,11 +12,14 @@ Each layer produces the **same per-feature understanding** (reports + graphs + a
 one command whenever the input data changes. (**Gold** is planned next, with the same
 mechanics.)
 
-**Four sources** are declared in the registry: `incidents`, `telemetry`, `machine` (the
-referential **dimension**) and `machines` (the **maintenance** facts); in Silver the
-maintenance facts are **enriched** with the machine dimension attributes (star schema).
-The exploration notebook is organised **by layer** (Bronze → Processing → Silver), each
-with a per-feature view, a per-source overview and inline analysis.
+**Four Bronze sources** are declared in the registry: `incidents`, `telemetry`, `machine`
+(the referential **dimension**) and `machines` (the **maintenance** facts). **Silver has
+only 3 sources** — `incidents`, `telemetry`, `maintenance`: the `machine` dimension is
+**Bronze-only** and is **merged first** into the maintenance facts (star schema), so there
+is no `silver.machine`. Silver processing covers deduplication, text→value encoding (traced
+in `text_encodings.json`), imputation, IQR outliers and normalization. The exploration
+notebook is organised **by layer** (Bronze → Processing → Silver); Processing documents the
+treatment **per feature**.
 
 ---
 
@@ -97,9 +100,9 @@ per-machine QC table for hourly series). **Quality status** criteria are declare
 `src/common/quality.py` (`FEATURE_CHECKS` by feature name, `SOURCE_FEATURE_CHECKS` scoped
 to a source — e.g. `machine_id` is a primary key only in the `machine` dimension).
 
-DB tables: `{bronze,silver}.incidents`, `{bronze,silver}.telemetry`,
-`{bronze,silver}.machine` (dimension) and `{bronze,silver}.maintenance` (facts, Silver
-enriched with the machine attributes).
+DB tables — **Bronze (4)**: `bronze.{incidents, telemetry, machine, maintenance}`;
+**Silver (3)**: `silver.{incidents, telemetry, maintenance}` (no `silver.machine` — the
+dimension is merged into `silver.maintenance`).
 
 > **Signals** are the columns prefixed by `type_` (binary 0/1 anomaly flags).
 
@@ -126,23 +129,26 @@ is checked for per-machine duplicates and missing hourly slots.
 
 The third input is a **PostgreSQL dump** (`data/raw/machines.sql`) with two tables,
 loaded into a local **SQLite** database via **SQLAlchemy ORM** (no PostgreSQL server
-needed) and read into pandas. It yields **two medallion sources**:
+needed) and read into pandas. It has **two Bronze sources** but a **single Silver table**
+(`silver.maintenance`):
 
 ```bash
 uv run python scripts/run_machines.py   # the maintenance (facts) source
 ```
 
 - **`maintenance`** facts (source `machines`; notebook **Machines/maintenance**):
-  Bronze = raw events; Silver = encoding (`maintenance_type`, `component`) + IQR outlier
-  treatment on `duration_hours`, then **enriched** by joining the machine dimension
-  attributes on `machine_id` (`criticality`, `production_line`, `location`, `model`,
-  capacities).
+  Bronze = raw events; Silver **merges the machine dimension first** (all attributes incl.
+  `commissioning_date`, on `machine_id` — star schema), derives features (calendar from
+  `maintenance_at` + `machine_age_years`) and encodes `maintenance_type`, `action_type`,
+  `component`, `criticality`, `production_line`, `location`, `model` (`duration_hours` kept
+  raw).
 - **`machine`** dimension / referential (source `machine`; notebook **Machines/machine**;
-  one row per machine): the **Bronze layer verifies coherence** (status: `machine_id`
-  primary key — no missing, **no duplicate** —, `criticality` ∈ {LOW, MEDIUM, HIGH},
-  positive capacities, commissioning date not in the future). Silver encodes `criticality`.
-  Being a dimension, it has no per-machine boxplot; it shows capacity distributions and
-  category counts. It is run by the full pipeline (`run_pipeline.py`).
+  one row per machine): **Bronze-only** (`BRONZE_ONLY = True`, **no `silver.machine`**). The
+  **Bronze layer verifies coherence** (status: `machine_id` primary key — no missing, **no
+  duplicate** —, `criticality` ∈ {LOW, MEDIUM, HIGH}, positive capacities, commissioning date
+  not in the future). Being a dimension, it has no per-machine boxplot; it shows capacity
+  distributions and category counts. Its attributes are encoded when merged into
+  `silver.maintenance`. It is run by the full pipeline (`run_pipeline.py`).
 
 ---
 

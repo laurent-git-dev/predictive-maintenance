@@ -47,10 +47,19 @@ def engineer_silver(df: pd.DataFrame) -> pd.DataFrame:
             + df[config.TIME_COLUMN].astype(str)
         )
         df[config.DATETIME_COLUMN] = pd.to_datetime(combined, errors="coerce")
+        dt = df[config.DATETIME_COLUMN].dt
+        df["hour"] = dt.hour.astype("Int64")
+        df["weekday"] = dt.weekday.astype("Int64")
+        df["month"] = dt.month.astype("Int64")
+        df["is_weekend"] = (dt.weekday >= 5).astype("Int64")
 
     if config.COMMENT_COLUMN in df.columns:
-        df["comment_pii_flag"] = df[config.COMMENT_COLUMN].notna() & df[
-            config.COMMENT_COLUMN
-        ].astype(str).str.strip().ne("")
+        comment = df[config.COMMENT_COLUMN]
+        df["comment_pii_flag"] = comment.notna() & comment.astype(str).str.strip().ne("")
+        lowered = comment.fillna("").astype(str).str.lower()
+        markers = [m.lower() for m in config.PRODUCTION_STOP_MARKERS]
+        df["production_stop_flag"] = lowered.apply(
+            lambda text: any(marker in text for marker in markers)
+        ).astype("Int64")
 
     return add_confidence_index(df)

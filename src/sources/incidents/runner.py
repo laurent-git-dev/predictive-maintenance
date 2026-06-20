@@ -25,7 +25,8 @@ TABLE = "incidents"
 BRONZE_NUMERIC = []
 SILVER_NUMERIC = [config.N_SIGNALS_COLUMN, config.CONFIDENCE_COLUMN]
 # Features rendered as an incident-count bar chart (severity is ordinal: kept as a
-# count chart only, no boxplot/distribution).
+# count chart only, no boxplot/distribution). The calendar features are Silver-only
+# (derived from datetime), so they render in the Silver layer by analogy with severity/shift.
 COUNT_FEATURES = [
     config.OPERATOR_NAME_COLUMN,
     config.OPERATOR_BADGE_COLUMN,
@@ -33,6 +34,9 @@ COUNT_FEATURES = [
     config.SEVERITY_COLUMN,
     config.COMMENT_COLUMN,
     config.SHIFT_COLUMN,
+    "hour",
+    "weekday",
+    "month",
 ]
 COUNT_LABEL = "incidents"
 # Keyword bars (feature, keywords, title): isolate a sub-population in free text.
@@ -71,7 +75,7 @@ def load_bronze(input_path=None):
 
 
 def to_silver(bronze_df):
-    """Feature engineering + declared processing on the bronze DataFrame."""
+    """Feature engineering + declared processing; returns ``(silver_df, report)``."""
     df = engineer_silver(bronze_df)
-    df, _ = apply_processing(df, PROCESSING)
-    return df
+    df, report = apply_processing(df, PROCESSING)
+    return df, report

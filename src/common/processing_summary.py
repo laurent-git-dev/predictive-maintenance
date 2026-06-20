@@ -1,9 +1,9 @@
-"""Display helper: describe the Bronze -> Silver transformations per feature.
+"""Display helper: describe the Bronze -> Silver transformation **per feature**.
 
-Display only — no processing happens here. The summary is **derived** from the Bronze
-and Silver DataFrames plus the source's declarative :class:`ProcessingConfig`, so it
-mirrors exactly what :func:`src.processing.pipeline.apply_processing` (and the source's
-feature engineering) produced, without needing the runtime report.
+Display only — no processing happens here. Everything is **derived** from the Bronze and
+Silver DataFrames plus the source's declarative :class:`ProcessingConfig`, so it mirrors
+exactly what :func:`src.processing.pipeline.apply_processing` (and the source's feature
+engineering) produced, without needing the runtime report.
 """
 
 from __future__ import annotations
@@ -21,57 +21,61 @@ def _iqr_bounds(series: pd.Series, k: float = 1.5) -> tuple[float, float]:
     return float(q1 - k * iqr), float(q3 + k * iqr)
 
 
-def processing_summary_markdown(
-    bronze_df: pd.DataFrame, silver_df: pd.DataFrame, processing: ProcessingConfig
+def _feature_treatment(
+    col: str, bronze_df: pd.DataFrame, silver_df: pd.DataFrame, processing: ProcessingConfig
+) -> list[str]:
+    """Bullet lines describing the Bronze -> Silver treatment applied to one feature."""
+    bullets: list[str] = []
+    in_bronze = col in bronze_df.columns
+    merged = not in_bronze
+
+    if col in processing.dedup.get("keys", []):
+        bullets.append(f"deduplication key (strategy: {processing.dedup.get('strategy')})")
+    if merged:
+        bullets.append("merged from the machine dimension (star schema)")
+    if col in processing.encode:
+        mapping = processing.encode[col]
+        detail = (
+            ", ".join(f"{k}→{v}" for k, v in mapping.items()) if mapping else "auto category codes"
+        )
+        bullets.append(f"text → value → `{col}_code` ({detail}); traced in `text_encodings.json`")
+    if col in processing.impute and in_bronze and col in silver_df.columns:
+        n_filled = int((bronze_df[col].isna() & silver_df[col].notna()).sum())
+        bullets.append(f"imputation: {processing.impute[col]} ({n_filled} value(s) filled)")
+    if col in processing.outliers and in_bronze:
+        low, high = _iqr_bounds(bronze_df[col])
+        bronze_num = pd.to_numeric(bronze_df[col], errors="coerce")
+        n_clipped = int(((bronze_num < low) | (bronze_num > high)).sum())
+        bullets.append(
+            f"outliers: IQR clip to [{round(low, 3)}, {round(high, 3)}] ({n_clipped} clipped)"
+        )
+    if col in processing.normalize:
+        bullets.append(f"normalization: {processing.normalize[col]} → `{col}_norm`")
+
+    if not bullets:
+        bullets.append(
+            "new in Silver (feature engineering)" if merged else "kept as-is (no transformation)"
+        )
+    return bullets
+
+
+def per_feature_processing_markdown(
+    bronze_df: pd.DataFrame,
+    silver_df: pd.DataFrame,
+    processing: ProcessingConfig,
+    prefix: str = "2",
 ) -> str:
-    """Markdown describing, per feature, the transformations applied Bronze -> Silver."""
+    """Numbered per-feature markdown (``##### <prefix>.<i> <feature>``) of the treatment.
+
+    Features are the Silver columns excluding the generated ``_code`` / ``_norm`` outputs
+    (those are mentioned under their source feature).
+    """
+    base_cols = [c for c in silver_df.columns if not (c.endswith("_code") or c.endswith("_norm"))]
     lines: list[str] = []
-    encoded_cols: set[str] = set()
-
-    if processing.encode:
-        lines += ["**Text → value (encoding)**", ""]
-        for col, mapping in processing.encode.items():
-            if col not in bronze_df.columns:
-                continue
-            new_col = f"{col}_code"
-            encoded_cols.add(new_col)
-            detail = (
-                ", ".join(f"{k}→{v}" for k, v in mapping.items())
-                if mapping
-                else "auto category codes"
-            )
-            lines.append(f"- `{col}` → `{new_col}` ({detail})")
+    for i, col in enumerate(base_cols, start=1):
+        lines.append(f"##### {prefix}.{i} {col}")
+        lines += [
+            f"- {bullet}" for bullet in _feature_treatment(col, bronze_df, silver_df, processing)
+        ]
         lines.append("")
-
-    if processing.impute:
-        lines += ["**Imputation**", ""]
-        for col, strategy in processing.impute.items():
-            if col not in bronze_df.columns or col not in silver_df.columns:
-                continue
-            n_filled = int((bronze_df[col].isna() & silver_df[col].notna()).sum())
-            lines.append(f"- `{col}` → {strategy} ({n_filled} value(s) filled)")
-        lines.append("")
-
-    if processing.outliers:
-        lines += ["**Outliers (IQR clipping)**", ""]
-        for col in processing.outliers:
-            if col not in bronze_df.columns or col not in silver_df.columns:
-                continue
-            low, high = _iqr_bounds(bronze_df[col])
-            bronze_num = pd.to_numeric(bronze_df[col], errors="coerce")
-            n_clipped = int(((bronze_num < low) | (bronze_num > high)).sum())
-            lines.append(
-                f"- `{col}` → clipped to [{round(low, 3)}, {round(high, 3)}] "
-                f"({n_clipped} value(s) clipped)"
-            )
-        lines.append("")
-
-    derived = [c for c in silver_df.columns if c not in bronze_df.columns and c not in encoded_cols]
-    if derived:
-        lines += ["**Derived features (new in Silver)**", ""]
-        lines += [f"- `{c}`" for c in derived]
-        lines.append("")
-
-    if not lines:
-        return "_No transformation: Silver is identical to Bronze._"
     return "\n".join(lines).rstrip()

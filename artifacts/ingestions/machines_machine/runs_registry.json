@@ -1,12 +1,12 @@
 {
   "runs": [
     {
-      "run_id": "202606191449",
-      "folder": "artifacts/ingestions/machines_machine/202606191449",
+      "run_id": "202606200840",
+      "folder": "artifacts/ingestions/machines_machine/202606200840",
       "bronze_rows": 15,
-      "silver_rows": 15,
+      "silver_rows": null,
       "bronze_db": "15 rows -> bronze.machine",
-      "silver_db": "15 rows -> silver.machine"
+      "silver_db": "n/a (bronze-only source)"
     }
   ]
 }
