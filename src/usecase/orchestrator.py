@@ -24,6 +24,7 @@ from src.framework.common.stage import run_layer
 from src.framework.db import engine as db_engine
 from src.framework.lineage.quality import check_quality
 from src.framework.lineage.tracker import Batch
+from src.settings import require_salt
 from src.usecase.analyses.runner import run_default as run_cross_source
 from src.usecase.gold.features import (
     FEATURES_COUNT,
@@ -242,6 +243,7 @@ def _get_engine(load_db: bool):
 def run_source_by_name(name: str, load_db: bool = True) -> dict:
     """Run a single source (by name) through the layers — used by per-source CLIs."""
     load_dotenv(config.PROJECT_ROOT / ".env")
+    require_salt()  # fail fast: operator PII pseudonymisation needs a configured salt
     spec = next(s for s in SOURCE_SPECS if s.name == name)
     return run_source(spec, _get_engine(load_db))
 
@@ -249,6 +251,7 @@ def run_source_by_name(name: str, load_db: bool = True) -> dict:
 def run_pipeline(load_db: bool = True) -> dict:
     """Run all sources (Bronze + Silver), build the unified Gold table, then cross-source."""
     load_dotenv(config.PROJECT_ROOT / ".env")
+    require_salt()  # fail fast: operator PII pseudonymisation needs a configured salt
     engine = _get_engine(load_db)
     batch = Batch(engine)  # one batch_id for the whole pipeline run (lineage raw -> gold)
     logger.info("=== Batch %s (code %s) ===", batch.batch_id, batch.code_version)

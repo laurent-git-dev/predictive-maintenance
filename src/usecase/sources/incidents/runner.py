@@ -9,12 +9,11 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from src import config
-from src.framework.common.env import load_dotenv
 from src.framework.processing.anonymization import pseudonymise_operators
 from src.framework.processing.pipeline import ProcessingConfig, apply_processing
+from src.settings import get_settings
 from src.usecase.ingestion.schemas import IncidentRow
 from src.usecase.sources.incidents import overview
 from src.usecase.sources.incidents.loader import load_incidents
@@ -69,10 +68,8 @@ PROCESSING = ProcessingConfig(
 
 
 def _salt_and_length() -> tuple[str, int]:
-    load_dotenv(config.PROJECT_ROOT / ".env")
-    salt = os.environ.get(config.SALT_ENV_VAR, "")
-    length = int(os.environ.get(config.PSEUDONYM_LENGTH_ENV_VAR, config.DEFAULT_PSEUDONYM_LENGTH))
-    return salt, length
+    settings = get_settings()
+    return settings.anonymization_salt, settings.pseudonym_length
 
 
 def load_bronze(input_path=None):

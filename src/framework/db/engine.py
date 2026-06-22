@@ -3,23 +3,19 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from src import config
+from src.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 
 def database_url() -> str:
-    """Build the PostgreSQL connection URL from environment variables."""
-    env = {k: os.environ.get(k, default) for k, default in config.DB_ENV_DEFAULTS.items()}
-    return (
-        f"postgresql+psycopg2://{env['POSTGRES_USER']}:{env['POSTGRES_PASSWORD']}"
-        f"@{env['POSTGRES_HOST']}:{env['POSTGRES_PORT']}/{env['POSTGRES_DB']}"
-    )
+    """Build the PostgreSQL connection URL from the centralised settings."""
+    return get_settings().database_url
 
 
 def get_engine() -> Engine:

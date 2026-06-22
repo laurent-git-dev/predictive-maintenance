@@ -73,8 +73,7 @@ CSV_SEPARATOR: str = ","
 CSV_ENCODING: str = "utf-8"
 
 # ─── Anonymisation ───────────────────────────────────────────────────────────
-SALT_ENV_VAR: str = "ANONYMIZATION_SALT"
-PSEUDONYM_LENGTH_ENV_VAR: str = "PSEUDONYM_LENGTH"
+SALT_ENV_VAR: str = "ANONYMIZATION_SALT"  # referenced in error messages; read via src.settings
 DEFAULT_PSEUDONYM_LENGTH: int = 16
 BADGE_PREFIX: str = "OP_"
 BADGE_HASH_LENGTH: int = 6
@@ -147,14 +146,8 @@ CROSS_SOURCE_ARTIFACTS_DIR: Path = ANALYSES_ARTIFACTS_DIR / "cross_source"
 CROSS_SOURCE_RUNS_REGISTRY_PATH: Path = CROSS_SOURCE_ARTIFACTS_DIR / "runs_registry.json"
 
 # ─── Database (PostgreSQL, Dockerised) ───────────────────────────────────────
-# Read from environment (.env); defaults match docker-compose.yml.
-DB_ENV_DEFAULTS: dict[str, str] = {
-    "POSTGRES_USER": "predictive",
-    "POSTGRES_PASSWORD": "predictive",
-    "POSTGRES_DB": "predictive_maintenance",
-    "POSTGRES_HOST": "localhost",
-    "POSTGRES_PORT": "5432",
-}
+# Connection settings (user/password/db/host/port) live in src/settings.py
+# (pydantic-settings, read from .env; defaults match docker-compose.yml).
 DB_CONNECT_TIMEOUT_SECONDS: int = 3
 
 # Medallion layers → PostgreSQL schemas (1 table per source in Bronze/Silver).
