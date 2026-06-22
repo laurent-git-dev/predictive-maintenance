@@ -1,0 +1,7 @@
+# Keep large / generated content out of Claude's search & reads (token cost).
+# These are never useful for reasoning about the code.
+artifacts/
+.venv/
+.dvc/cache/
+uv.lock
+data/raw/
