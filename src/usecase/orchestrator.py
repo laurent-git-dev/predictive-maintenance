@@ -14,7 +14,6 @@ is run. One command, idempotent (tables reloaded).
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from pathlib import Path
 
 from src import config
@@ -48,7 +47,7 @@ def run_source(spec: SourceSpec, engine=None, batch: Batch | None = None) -> dic
     """Run one source through the Bronze and Silver layers (returns its Silver frame)."""
     batch = batch or Batch(engine)
     logger.info("=== Source: %s ===", spec.name)
-    run_id = datetime.now().strftime("%Y%m%d%H%M")
+    run_id = batch.batch_id  # one identifier per run: artifacts ↔ meta.processing_runs
     base = _artifacts_base(spec.name)
     run_dir = base / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -103,6 +102,7 @@ def run_source(spec: SourceSpec, engine=None, batch: Batch | None = None) -> dic
             base / "runs_registry.json",
             {
                 "run_id": run_id,
+                "code_version": batch.code_version,
                 "folder": run_dir.relative_to(config.PROJECT_ROOT).as_posix(),
                 "bronze_rows": bronze["rows"],
                 "silver_rows": None,
@@ -160,6 +160,7 @@ def run_source(spec: SourceSpec, engine=None, batch: Batch | None = None) -> dic
         base / "runs_registry.json",
         {
             "run_id": run_id,
+            "code_version": batch.code_version,
             "folder": run_dir.relative_to(config.PROJECT_ROOT).as_posix(),
             "bronze_rows": bronze["rows"],
             "silver_rows": silver["rows"],
@@ -178,7 +179,7 @@ def run_gold(silver_by_source: dict, engine=None, batch: Batch | None = None) ->
     """
     batch = batch or Batch(engine)
     logger.info("=== Gold: unified feature table (machine x hour) ===")
-    run_id = datetime.now().strftime("%Y%m%d%H%M")
+    run_id = batch.batch_id  # same identifier as the sources / meta.processing_runs
     run_dir = config.GOLD_ARTIFACTS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -219,11 +220,13 @@ def run_gold(silver_by_source: dict, engine=None, batch: Batch | None = None) ->
         count_features=FEATURES_COUNT,
         count_label="machine-hours",
         engine=engine,
+        nest_layer=False,  # Gold is a single layer: artifacts live directly under the run dir
     )
     upsert_run(
         config.GOLD_RUNS_REGISTRY_PATH,
         {
             "run_id": run_id,
+            "code_version": batch.code_version,
             "folder": run_dir.relative_to(config.PROJECT_ROOT).as_posix(),
             "gold_rows": gold["rows"],
             "gold_db": gold["db"],

@@ -93,6 +93,13 @@ Silver, build Gold) écrit **une ligne** dans **`meta.processing_runs`** via
 started_at`. Contrôles qualité **soft** (`src/framework/lineage/quality.py` : unicité du grain Gold,
 continuité du nombre de lignes vs batch précédent) → enregistrés + warning, sans bloquer.
 
+**Un seul identifiant par exécution.** Le `batch_id` sert aussi de `run_id` aux dossiers
+d'artefacts : sources et Gold d'une même exécution partagent le même horodatage
+(`artifacts/.../<batch_id>/`). Deux pistes de suivi **complémentaires**, corrélables par cet id :
+`meta.processing_runs` = lignage **DB faisant foi** (hash, qualité, git sha) ; `runs_registry.json`
+= index **fichier** par couche, disponible **sans DB** (mode `--no-db`) et portant `code_version`
+(git sha) pour pointer vers la ligne de lignage correspondante.
+
 ## Notebook (3 chapters)
 
 `## 0. Setup` → `## 1. BRONZE (raw data)` → `## 2. SILVER (treated data)` → `## 3. GOLD

@@ -70,12 +70,17 @@ def run_layer(
     feature_plots: dict | None = None,
     encodings: dict | None = None,
     engine=None,
+    nest_layer: bool = True,
 ) -> dict:
     """Produce a layer's per-feature understanding + reports, and load it to the DB.
 
+    ``nest_layer`` controls the artifact folder: ``True`` writes to ``run_dir/<layer>``
+    (sources have several layers per run); ``False`` writes directly to ``run_dir``
+    (Gold is a single layer — avoids a redundant ``gold/<run>/gold`` nesting).
+
     Returns a status dict (rows + DB outcome).
     """
-    stage_dir = Path(run_dir) / layer
+    stage_dir = Path(run_dir) / layer if nest_layer else Path(run_dir)
     stage_dir.mkdir(parents=True, exist_ok=True)
     logger.info("=== %s · %s layer ===", source, layer)
 
