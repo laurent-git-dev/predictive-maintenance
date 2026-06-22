@@ -1,7 +1,7 @@
 """Telemetry source — bronze/silver builders for the medallion orchestrator.
 
 - Bronze : raw typed telemetry (no PII).
-- Silver : declared processing (median imputation + IQR outlier clipping).
+- Silver : declared processing (per-machine time interpolation + z-score; no outlier clip).
 """
 
 from __future__ import annotations
@@ -45,8 +45,16 @@ OVERVIEW = overview.plots
 PROCESSING = ProcessingConfig(
     # Reconcile conflicting duplicate readings for the same (machine, hour) by averaging.
     dedup={"keys": [config.MACHINE_COLUMN, config.TELEMETRY_TIMESTAMP_COLUMN], "strategy": "mean"},
-    impute={param: "median" for param in MEASURES},
-    outliers=list(MEASURES),
+    # Telemetry is an hourly per-machine series: fill gaps by time interpolation within each
+    # machine. A global median would instead inject an artificial spike at the median value.
+    interpolate={
+        "group": config.MACHINE_COLUMN,
+        "time": config.TELEMETRY_TIMESTAMP_COLUMN,
+        "columns": list(MEASURES),
+        "method": "time",
+    },
+    # Outliers intentionally NOT clipped: IQR winsorisation piled mass at the fence (an
+    # artificial spike at the distribution end). Raw extremes are kept for analysis.
     normalize={param: "zscore" for param in MEASURES},
 )
 
@@ -57,7 +65,7 @@ def load_bronze(input_path=None):
 
 
 def to_silver(bronze_df):
-    """Dedup + impute + IQR + z-score on measures, then add ``over_capacity_flag``.
+    """Dedup + per-machine time interpolation + z-score, then add ``over_capacity_flag``.
 
     ``pieces_produced`` is kept raw; ``over_capacity_flag`` (0/1) marks readings whose
     production exceeds the machine's declared hourly capacity (from the referential).

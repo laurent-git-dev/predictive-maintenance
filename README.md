@@ -118,8 +118,10 @@ uv run python scripts/run_telemetry.py
 ```
 
 Columns: `machine_id, timestamp, temperature_c, pressure_bar, voltage_mean_v,
-rotation_mean_rpm, pieces_produced`. Bronze = raw load; Silver = median imputation +
-IQR outlier treatment on the 5 parameters. Extra hooks: a per-machine `TIMESERIES`
+rotation_mean_rpm, pieces_produced`. Bronze = raw load; Silver = dedup (mean) +
+per-machine time interpolation (linear in time, ffill/bfill at edges) + z-score on the 4
+physical measures. Outliers are **not** winsorised (IQR clipping piled an artificial spike
+at the fence); raw extremes are kept and `pieces_produced` stays raw. Extra hooks: a per-machine `TIMESERIES`
 (daily/weekly piece production) and a source `OVERVIEW` (measures over time); `timestamp`
 is checked for per-machine duplicates and missing hourly slots.
 

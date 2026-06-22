@@ -138,6 +138,22 @@ def _impute_bullet(col: str, bronze_df: pd.DataFrame, strategy: str) -> str | No
     )
 
 
+def _interpolate_bullet(col: str, bronze_df: pd.DataFrame, interp: dict) -> str | None:
+    """Describe per-group time interpolation of ``col`` (``None`` if nothing was missing)."""
+    n_missing = int(bronze_df[col].isna().sum())
+    if n_missing == 0:
+        return None
+    group, time = interp.get("group"), interp.get("time")
+    return (
+        f"**Imputation by time interpolation** (per `{group}`, ordered by `{time}`): filled "
+        f"{n_missing} missing reading(s) by interpolating over time within each machine "
+        f"(leading/trailing gaps closed by forward/backward fill). _Why:_ telemetry is an "
+        f"hourly per-machine series — a neighbour-in-time estimate respects the signal "
+        f"dynamics, whereas a global median injects an artificial spike at the median value. "
+        f"_Example:_ a gap between two hourly readings is filled by their time-weighted value."
+    )
+
+
 def _outlier_bullet(col: str, bronze_df: pd.DataFrame) -> str | None:
     """Describe IQR winsorization of ``col`` (``None`` if nothing was out of bounds)."""
     low, high = _iqr_bounds(bronze_df[col])
@@ -238,6 +254,11 @@ def _feature_treatment(
             f"({len(bronze_df) - len(silver_df)} removed). _Why:_ reconciles conflicting "
             f"duplicate readings into one record per logical key."
         )
+    interp = processing.interpolate or {}
+    if col in interp.get("columns", []) and in_bronze:
+        bullet = _interpolate_bullet(col, bronze_df, interp)
+        if bullet:
+            bullets.append(bullet)
     if col in processing.encode:
         bullets.append(_encode_bullet(col, silver_df, processing.encode[col]))
     if col in processing.impute and in_bronze:

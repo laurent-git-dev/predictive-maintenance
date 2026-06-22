@@ -379,7 +379,10 @@ uv run python scripts/run_telemetry.py
 
 Artefacts produits dans `artifacts/ingestions/telemetry/AAAAMMJJHHMM/{bronze,silver}/`,
 modèle **per-feature** (voir « Artefacts attendus »). Pas de PII : Bronze = `load_telemetry`,
-Silver = imputation (médiane) + traitement des outliers (IQR) sur les 5 paramètres.
+Silver = dédoublonnage (moyenne) + **imputation par interpolation temporelle par machine**
+(linéaire dans le temps, ffill/bfill aux bords) + normalisation (z-score) sur les 4 mesures
+physiques. **Pas de winsorisation des outliers** (le clipping IQR empilait une masse
+artificielle sur la borne) : les extrêmes bruts sont conservés. `pieces_produced` reste brut.
 Hooks déclarés : `TIMESERIES` (production journalière/hebdomadaire par machine sur
 `pieces_produced`) et `OVERVIEW` (`src/sources/telemetry/overview.py` : évolution des 4
 mesures physiques dans le temps). `timestamp` porte les critères `UNIQUE_PER_MACHINE` +

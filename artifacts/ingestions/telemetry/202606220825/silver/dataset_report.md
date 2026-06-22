@@ -50,16 +50,16 @@
 
 ### temperature_c (<span style="color:green">OK</span>)
 
-- **dtype** float64 · **count** 134280 · **unique** 18634 · **missing** 0 (0.0%)
-- **range** 32.65 → 63.65 (span 31.0) · **Q1/median/Q3** 44.275 / 48.055 / 52.025
-- **mean** 48.171 · **std** 5.187 · **skew** 0.077
+- **dtype** float64 · **count** 134280 · **unique** 19497 · **missing** 0 (0.0%)
+- **range** 32.0 → 80.0 (span 48.0) · **Q1/median/Q3** 44.258 / 48.058 / 52.047
+- **mean** 48.185 · **std** 5.245 · **skew** 0.181
 
 **Outliers** — flagged values per method:
 
 | method | normal band | below — n (range) | above — n (range) |
 |---|---|---|---|
-| IQR (k=1.5) | [32.65, 63.65] | 0 — | 0 — |
-| z-score (k=3) | [32.609, 63.733] | 0 — | 0 — |
+| IQR (k=1.5) | [32.575, 63.73] | 3 [32.0, 32.543] | 275 [63.755, 80.0] |
+| z-score (k=3) | [32.449, 63.921] | 2 [32.0, 32.0] | 268 [63.955, 80.0] |
 
 ![temperature_c](1.1_box_temperature_c.png)
 
@@ -67,16 +67,16 @@
 
 ### pressure_bar (<span style="color:green">OK</span>)
 
-- **dtype** float64 · **count** 134280 · **unique** 10042 · **missing** 0 (0.0%)
-- **range** 194.694 → 205.07 (span 10.376) · **Q1/median/Q3** 198.585 / 199.867 / 201.179
-- **mean** 199.842 · **std** 1.861 · **skew** -0.15
+- **dtype** float64 · **count** 134280 · **unique** 12320 · **missing** 0 (0.0%)
+- **range** 159.991 → 215.814 (span 55.823) · **Q1/median/Q3** 198.578 / 199.866 / 201.185
+- **mean** 199.77 · **std** 2.367 · **skew** -4.155
 
 **Outliers** — flagged values per method:
 
 | method | normal band | below — n (range) | above — n (range) |
 |---|---|---|---|
-| IQR (k=1.5) | [194.694, 205.07] | 0 — | 0 — |
-| z-score (k=3) | [194.26, 205.425] | 0 — | 0 — |
+| IQR (k=1.5) | [194.668, 205.096] | 1282 [159.991, 194.665] | 243 [205.1, 215.814] |
+| z-score (k=3) | [192.67, 206.87] | 923 [159.991, 192.666] | 129 [206.885, 215.814] |
 
 ![pressure_bar](1.2_box_pressure_bar.png)
 
@@ -84,16 +84,16 @@
 
 ### voltage_mean_v (<span style="color:green">OK</span>)
 
-- **dtype** float64 · **count** 134280 · **unique** 4134 · **missing** 0 (0.0%)
-- **range** 221.35 → 233.83 (span 12.48) · **Q1/median/Q3** 226.03 / 227.42 / 229.15
-- **mean** 227.621 · **std** 2.271 · **skew** 0.24
+- **dtype** float64 · **count** 134280 · **unique** 4611 · **missing** 0 (0.0%)
+- **range** 220.9 → 242.0 (span 21.1) · **Q1/median/Q3** 226.03 / 227.42 / 229.15
+- **mean** 227.63 · **std** 2.304 · **skew** 0.377
 
 **Outliers** — flagged values per method:
 
 | method | normal band | below — n (range) | above — n (range) |
 |---|---|---|---|
-| IQR (k=1.5) | [221.35, 233.83] | 0 — | 0 — |
-| z-score (k=3) | [220.809, 234.434] | 0 — | 0 — |
+| IQR (k=1.5) | [221.35, 233.83] | 19 [220.9, 221.33] | 620 [233.84, 242.0] |
+| z-score (k=3) | [220.719, 234.542] | 0 — | 362 [234.556, 242.0] |
 
 ![voltage_mean_v](1.3_box_voltage_mean_v.png)
 
@@ -101,16 +101,16 @@
 
 ### rotation_mean_rpm (<span style="color:green">OK</span>)
 
-- **dtype** float64 · **count** 134280 · **unique** 26825 · **missing** 0 (0.0%)
-- **range** 1467.162 → 1712.709 (span 245.548) · **Q1/median/Q3** 1559.242 / 1590.378 / 1620.629
-- **mean** 1589.308 · **std** 43.211 · **skew** -0.113
+- **dtype** float64 · **count** 134280 · **unique** 28381 · **missing** 0 (0.0%)
+- **range** 1100.0 → 1900.0 (span 800.0) · **Q1/median/Q3** 1559.026 / 1590.37 / 1620.829
+- **mean** 1589.186 · **std** 45.965 · **skew** -0.377
 
 **Outliers** — flagged values per method:
 
 | method | normal band | below — n (range) | above — n (range) |
 |---|---|---|---|
-| IQR (k=1.5) | [1467.162, 1712.709] | 0 — | 0 — |
-| z-score (k=3) | [1459.674, 1718.943] | 0 — | 0 — |
+| IQR (k=1.5) | [1466.322, 1713.533] | 506 [1100.0, 1466.281] | 353 [1713.548, 1900.0] |
+| z-score (k=3) | [1451.291, 1727.081] | 367 [1100.0, 1451.263] | 274 [1727.567, 1900.0] |
 
 ![rotation_mean_rpm](1.4_box_rotation_mean_rpm.png)
 
@@ -139,55 +139,55 @@
 
 ### temperature_c_norm
 
-- **dtype** float64 · **count** 134280 · **unique** 18634 · **missing** 0 (0.0%)
-- **range** -2.992 → 2.984 (span 5.976) · **Q1/median/Q3** -0.751 / -0.022 / 0.743
-- **mean** -0.0 · **std** 1.0 · **skew** 0.077
+- **dtype** float64 · **count** 134280 · **unique** 19497 · **missing** 0 (0.0%)
+- **range** -3.086 → 6.065 (span 9.151) · **Q1/median/Q3** -0.749 / -0.024 / 0.736
+- **mean** 0.0 · **std** 1.0 · **skew** 0.181
 
 **Outliers** — flagged values per method:
 
 | method | normal band | below — n (range) | above — n (range) |
 |---|---|---|---|
-| IQR (k=1.5) | [-2.992, 2.984] | 0 — | 0 — |
-| z-score (k=3) | [-3.0, 3.0] | 0 — | 0 — |
+| IQR (k=1.5) | [-2.976, 2.964] | 3 [-3.086, -2.982] | 275 [2.968, 6.065] |
+| z-score (k=3) | [-3.0, 3.0] | 2 [-3.086, -3.086] | 268 [3.006, 6.065] |
 
 ### pressure_bar_norm
 
-- **dtype** float64 · **count** 134280 · **unique** 10042 · **missing** 0 (0.0%)
-- **range** -2.767 → 2.809 (span 5.576) · **Q1/median/Q3** -0.676 / 0.013 / 0.718
-- **mean** -0.0 · **std** 1.0 · **skew** -0.15
+- **dtype** float64 · **count** 134280 · **unique** 12320 · **missing** 0 (0.0%)
+- **range** -16.809 → 6.779 (span 23.588) · **Q1/median/Q3** -0.504 / 0.04 / 0.598
+- **mean** -0.0 · **std** 1.0 · **skew** -4.155
 
 **Outliers** — flagged values per method:
 
 | method | normal band | below — n (range) | above — n (range) |
 |---|---|---|---|
-| IQR (k=1.5) | [-2.767, 2.809] | 0 — | 0 — |
-| z-score (k=3) | [-3.0, 3.0] | 0 — | 0 — |
+| IQR (k=1.5) | [-2.156, 2.25] | 1282 [-16.809, -2.157] | 243 [2.252, 6.779] |
+| z-score (k=3) | [-3.0, 3.0] | 923 [-16.809, -3.002] | 129 [3.006, 6.779] |
 
 ### voltage_mean_v_norm
 
-- **dtype** float64 · **count** 134280 · **unique** 4134 · **missing** 0 (0.0%)
-- **range** -2.762 → 2.734 (span 5.496) · **Q1/median/Q3** -0.701 / -0.089 / 0.673
-- **mean** -0.0 · **std** 1.0 · **skew** 0.24
+- **dtype** float64 · **count** 134280 · **unique** 4611 · **missing** 0 (0.0%)
+- **range** -2.922 → 6.237 (span 9.159) · **Q1/median/Q3** -0.695 / -0.091 / 0.66
+- **mean** 0.0 · **std** 1.0 · **skew** 0.377
 
 **Outliers** — flagged values per method:
 
 | method | normal band | below — n (range) | above — n (range) |
 |---|---|---|---|
-| IQR (k=1.5) | [-2.762, 2.734] | 0 — | 0 — |
-| z-score (k=3) | [-3.0, 3.0] | 0 — | 0 — |
+| IQR (k=1.5) | [-2.726, 2.691] | 19 [-2.922, -2.735] | 620 [2.695, 6.237] |
+| z-score (k=3) | [-3.0, 3.0] | 0 — | 362 [3.006, 6.237] |
 
 ### rotation_mean_rpm_norm
 
-- **dtype** float64 · **count** 134280 · **unique** 26825 · **missing** 0 (0.0%)
-- **range** -2.827 → 2.856 (span 5.682) · **Q1/median/Q3** -0.696 / 0.025 / 0.725
-- **mean** 0.0 · **std** 1.0 · **skew** -0.113
+- **dtype** float64 · **count** 134280 · **unique** 28381 · **missing** 0 (0.0%)
+- **range** -10.643 → 6.762 (span 17.405) · **Q1/median/Q3** -0.656 / 0.026 / 0.688
+- **mean** 0.0 · **std** 1.0 · **skew** -0.377
 
 **Outliers** — flagged values per method:
 
 | method | normal band | below — n (range) | above — n (range) |
 |---|---|---|---|
-| IQR (k=1.5) | [-2.827, 2.856] | 0 — | 359 [2.856, 2.856] |
-| z-score (k=3) | [-3.0, 3.0] | 0 — | 0 — |
+| IQR (k=1.5) | [-2.673, 2.705] | 506 [-10.643, -2.674] | 353 [2.706, 6.762] |
+| z-score (k=3) | [-3.0, 3.0] | 367 [-10.643, -3.001] | 274 [3.011, 6.762] |
 
 ### over_capacity_flag (<span style="color:green">OK</span>)
 

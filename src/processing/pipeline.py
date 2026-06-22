@@ -14,6 +14,7 @@ import pandas as pd
 
 from src.processing.dedup import deduplicate
 from src.processing.imputation import impute
+from src.processing.interpolation import interpolate_by_group
 from src.processing.normalization import normalize
 from src.processing.outliers import treat_outliers
 from src.processing.transformation import encode_categorical
@@ -29,6 +30,10 @@ class ProcessingConfig:
     ----------
     dedup : dict
         ``{"keys": [...], "strategy": "mean" | "first" | "last"}`` (empty = no dedup).
+    interpolate : dict
+        ``{"group": ..., "time": ..., "columns": [...], "method": "time"}`` — fill missing
+        values by time interpolation within each group (empty = no interpolation). Applied
+        right after dedup, so it works on the reconciled rows.
     encode : dict[str, dict | None]
         ``column -> value map`` (or ``None`` for automatic category codes).
     impute : dict[str, str]
@@ -43,6 +48,7 @@ class ProcessingConfig:
     impute: dict = field(default_factory=dict)
     outliers: list = field(default_factory=list)
     dedup: dict = field(default_factory=dict)
+    interpolate: dict = field(default_factory=dict)
     normalize: dict = field(default_factory=dict)
 
 
@@ -52,6 +58,14 @@ def apply_processing(df: pd.DataFrame, config: ProcessingConfig) -> tuple[pd.Dat
     if config.dedup and config.dedup.get("keys"):
         df, report["dedup"] = deduplicate(
             df, config.dedup["keys"], config.dedup.get("strategy", "first")
+        )
+    if config.interpolate and config.interpolate.get("columns"):
+        df, report["interpolate"] = interpolate_by_group(
+            df,
+            config.interpolate["group"],
+            config.interpolate["time"],
+            config.interpolate["columns"],
+            config.interpolate.get("method", "time"),
         )
     if config.encode:
         df, report["encode"] = encode_categorical(df, config.encode)
