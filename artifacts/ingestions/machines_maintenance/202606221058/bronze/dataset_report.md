@@ -74,6 +74,27 @@
 | IQR (k=1.5) | [0.77, 4.05] | 0 — | 39 [4.06, 8.0] |
 | z-score (k=3) | [0.288, 4.676] | 0 — | 22 [4.71, 8.0] |
 
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 1 | 0 | 1 |
+| MACH-03 | 271 | 0 | 13 | 0 | 5 |
+| MACH-04 | 52 | 0 | 2 | 0 | 2 |
+| MACH-05 | 100 | 0 | 3 | 0 | 1 |
+| MACH-06 | 65 | 0 | 1 | 0 | 1 |
+| MACH-07 | 43 | 0 | 1 | 0 | 1 |
+| MACH-08 | 108 | 0 | 3 | 0 | 2 |
+| MACH-09 | 86 | 0 | 6 | 0 | 1 |
+| MACH-10 | 74 | 0 | 2 | 0 | 1 |
+| MACH-11 | 64 | 0 | 2 | 0 | 2 |
+| MACH-12 | 54 | 0 | 2 | 0 | 1 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 3 | 0 | 3 |
+| **total** | 1562 | 0 | 39 | 0 | 21 |
+
 ![duration_hours](1.1_box_duration_hours.png)
 
 ![duration_hours](2.1_dist_duration_hours.png)

@@ -159,6 +159,54 @@ def outlier_summary_markdown(series: pd.Series) -> str:
     return "\n".join(lines)
 
 
+def outlier_by_machine_markdown(df: pd.DataFrame, feature: str, machine_col: str) -> str:
+    """Per-machine outlier counts, with the fences recomputed **within each machine**.
+
+    Complements the global :func:`outlier_summary_markdown`: a value can be normal overall
+    yet atypical for its own machine (each machine has its own operating regime). For each
+    machine, the IQR (k=1.5) and z-score (k=3) bands are computed on that machine's values
+    only, and the below/above counts are reported. Returns ``""`` when there is no machine
+    column or fewer than two machines.
+    """
+    if machine_col not in df.columns or machine_col == feature:
+        return ""
+    sub = df[[machine_col, feature]].copy()
+    sub[feature] = pd.to_numeric(sub[feature], errors="coerce")
+    sub = sub.dropna(subset=[feature])
+    if sub.empty or sub[machine_col].nunique() < 2:
+        return ""
+
+    rows, tot = [], [0, 0, 0, 0]  # iqr_below, iqr_above, z_below, z_above
+    for machine, grp in sub.groupby(machine_col):
+        v = grp[feature]
+        q1, q3 = v.quantile(0.25), v.quantile(0.75)
+        iqr = q3 - q1
+        iqr_low, iqr_high = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+        ib, ia = int((v < iqr_low).sum()), int((v > iqr_high).sum())
+        mean, std = v.mean(), v.std()
+        if std and std > 0:
+            zb, za = int((v < mean - 3 * std).sum()), int((v > mean + 3 * std).sum())
+        else:
+            zb = za = 0
+        for i, c in enumerate((ib, ia, zb, za)):
+            tot[i] += c
+        rows.append((str(machine), len(v), ib, ia, zb, za))
+    rows.sort(key=lambda r: r[0])
+
+    lines = [
+        "",
+        "**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):",
+        "",
+        "| machine | n | IQR below | IQR above | z-score below | z-score above |",
+        "|---|---|---|---|---|---|",
+    ]
+    lines += [f"| {m} | {n} | {ib} | {ia} | {zb} | {za} |" for m, n, ib, ia, zb, za in rows]
+    lines.append(
+        f"| **total** | {sum(r[1] for r in rows)} | {tot[0]} | {tot[1]} | {tot[2]} | {tot[3]} |"
+    )
+    return "\n".join(lines)
+
+
 def timestamp_qc_markdown(df: pd.DataFrame, time_col: str, machine_col: str) -> str:
     """Per-machine QC table for an hourly timestamp: duplicate stamps + missing hours.
 
@@ -261,6 +309,9 @@ def feature_synthesis_markdown(df: pd.DataFrame, feature: str, source: str | Non
             outliers = outlier_summary_markdown(df[feature])
             if outliers:
                 parts.append(outliers)
+            by_machine = outlier_by_machine_markdown(df, feature, config.MACHINE_COLUMN)
+            if by_machine:
+                parts.append(by_machine)
     elif "ts_min" in e:  # datetime
         parts.append(
             f"- **range** {e['ts_min']:%Y-%m-%d %H:%M} → {e['ts_max']:%Y-%m-%d %H:%M} "

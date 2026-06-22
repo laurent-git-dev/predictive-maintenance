@@ -74,6 +74,27 @@
 | IQR (k=1.5) | [0.77, 4.05] | 0 — | 39 [4.06, 8.0] |
 | z-score (k=3) | [0.288, 4.676] | 0 — | 22 [4.71, 8.0] |
 
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 1 | 0 | 1 |
+| MACH-03 | 271 | 0 | 13 | 0 | 5 |
+| MACH-04 | 52 | 0 | 2 | 0 | 2 |
+| MACH-05 | 100 | 0 | 3 | 0 | 1 |
+| MACH-06 | 65 | 0 | 1 | 0 | 1 |
+| MACH-07 | 43 | 0 | 1 | 0 | 1 |
+| MACH-08 | 108 | 0 | 3 | 0 | 2 |
+| MACH-09 | 86 | 0 | 6 | 0 | 1 |
+| MACH-10 | 74 | 0 | 2 | 0 | 1 |
+| MACH-11 | 64 | 0 | 2 | 0 | 2 |
+| MACH-12 | 54 | 0 | 2 | 0 | 1 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 3 | 0 | 3 |
+| **total** | 1562 | 0 | 39 | 0 | 21 |
+
 ![duration_hours](1.1_box_duration_hours.png)
 
 ![duration_hours](2.1_dist_duration_hours.png)
@@ -145,6 +166,27 @@
 | IQR (k=1.5) | [-10.5, 33.5] | 0 — | 0 — |
 | z-score (k=3) | [-8.553, 31.448] | 0 — | 0 — |
 
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 0 | 0 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 0 | 0 | 0 | 0 |
+
 ![hour](3.7_count_hour.png)
 
 ### weekday (<span style="color:green">OK</span>)
@@ -159,6 +201,27 @@
 |---|---|---|---|
 | IQR (k=1.5) | [-5.0, 11.0] | 0 — | 0 — |
 | z-score (k=3) | [-3.026, 9.22] | 0 — | 0 — |
+
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 0 | 0 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 0 | 0 | 0 | 0 |
 - **distinct values**: 0, 1, 2, 3, 4, 5, 6
 
 ![weekday](3.8_count_weekday.png)
@@ -175,6 +238,27 @@
 |---|---|---|---|
 | IQR (k=1.5) | [-3.5, 16.5] | 0 — | 0 — |
 | z-score (k=3) | [-3.79, 16.804] | 0 — | 0 — |
+
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 3 | 3 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 3 | 3 | 0 | 0 |
 - **distinct values**: 1, 10, 11, 12, 2, 3, 4, 5, 6, 7, 8, 9
 
 ![month](3.9_count_month.png)
@@ -199,6 +283,27 @@
 | IQR (k=1.5) | [-2.194, 10.836] | 0 — | 0 — |
 | z-score (k=3) | [-1.184, 9.513] | 0 — | 0 — |
 
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 1 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 0 | 0 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 1 | 0 | 0 | 0 |
+
 ![machine_age_years](1.2_box_machine_age_years.png)
 
 ![machine_age_years](2.2_dist_machine_age_years.png)
@@ -220,6 +325,27 @@
 |---|---|---|---|
 | IQR (k=1.5) | [2.0, 2.0] | 115 [0.0, 1.0] | 0 — |
 | z-score (k=3) | [0.432, 3.306] | 90 [0.0, 0.0] | 0 — |
+
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 8 | 0 | 6 | 0 |
+| MACH-02 | 44 | 7 | 0 | 0 | 0 |
+| MACH-03 | 271 | 7 | 0 | 7 | 0 |
+| MACH-04 | 52 | 8 | 0 | 0 | 0 |
+| MACH-05 | 100 | 9 | 0 | 6 | 0 |
+| MACH-06 | 65 | 7 | 0 | 6 | 0 |
+| MACH-07 | 43 | 7 | 0 | 0 | 0 |
+| MACH-08 | 108 | 8 | 0 | 6 | 0 |
+| MACH-09 | 86 | 9 | 0 | 6 | 0 |
+| MACH-10 | 74 | 8 | 0 | 6 | 0 |
+| MACH-11 | 64 | 8 | 0 | 0 | 0 |
+| MACH-12 | 54 | 8 | 0 | 0 | 0 |
+| MACH-13 | 260 | 6 | 0 | 6 | 0 |
+| MACH-14 | 66 | 6 | 0 | 6 | 0 |
+| MACH-15 | 88 | 9 | 0 | 6 | 0 |
+| **total** | 1562 | 115 | 0 | 61 | 0 |
 - **distinct values**: 0, 1, 2
 
 ### component_code
@@ -234,6 +360,27 @@
 |---|---|---|---|
 | IQR (k=1.5) | [-9.5, 18.5] | 0 — | 0 — |
 | z-score (k=3) | [-5.812, 16.119] | 0 — | 0 — |
+
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 0 | 0 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 0 | 0 | 0 | 0 |
 - **distinct values**: 0, 1, 10, 11, 2, 3, 4, 5, 6, 7, 8, 9
 
 ### criticality_code
@@ -248,6 +395,27 @@
 |---|---|---|---|
 | IQR (k=1.5) | [-0.5, 3.5] | 0 — | 0 — |
 | z-score (k=3) | [-0.979, 3.207] | 0 — | 0 — |
+
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 0 | 0 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 0 | 0 | 0 | 0 |
 - **distinct values**: 0, 1, 2
 
 ### production_line_code
@@ -262,6 +430,27 @@
 |---|---|---|---|
 | IQR (k=1.5) | [-3.0, 5.0] | 0 — | 0 — |
 | z-score (k=3) | [-1.456, 3.258] | 0 — | 0 — |
+
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 0 | 0 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 0 | 0 | 0 | 0 |
 - **distinct values**: 0, 1, 2
 
 ### location_code
@@ -276,6 +465,27 @@
 |---|---|---|---|
 | IQR (k=1.5) | [-3.0, 5.0] | 0 — | 0 — |
 | z-score (k=3) | [-1.554, 3.714] | 0 — | 0 — |
+
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 0 | 0 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 0 | 0 | 0 | 0 |
 - **distinct values**: 0, 1, 2
 
 ### model_code
@@ -290,6 +500,27 @@
 |---|---|---|---|
 | IQR (k=1.5) | [-0.5, 3.5] | 0 — | 0 — |
 | z-score (k=3) | [-1.544, 3.951] | 0 — | 0 — |
+
+**Outliers by machine** (IQR k=1.5 and z-score k=3, fences recomputed per machine):
+
+| machine | n | IQR below | IQR above | z-score below | z-score above |
+|---|---|---|---|---|---|
+| MACH-01 | 187 | 0 | 0 | 0 | 0 |
+| MACH-02 | 44 | 0 | 0 | 0 | 0 |
+| MACH-03 | 271 | 0 | 0 | 0 | 0 |
+| MACH-04 | 52 | 0 | 0 | 0 | 0 |
+| MACH-05 | 100 | 0 | 0 | 0 | 0 |
+| MACH-06 | 65 | 0 | 0 | 0 | 0 |
+| MACH-07 | 43 | 0 | 0 | 0 | 0 |
+| MACH-08 | 108 | 0 | 0 | 0 | 0 |
+| MACH-09 | 86 | 0 | 0 | 0 | 0 |
+| MACH-10 | 74 | 0 | 0 | 0 | 0 |
+| MACH-11 | 64 | 0 | 0 | 0 | 0 |
+| MACH-12 | 54 | 0 | 0 | 0 | 0 |
+| MACH-13 | 260 | 0 | 0 | 0 | 0 |
+| MACH-14 | 66 | 0 | 0 | 0 | 0 |
+| MACH-15 | 88 | 0 | 0 | 0 | 0 |
+| **total** | 1562 | 0 | 0 | 0 | 0 |
 - **distinct values**: 0, 1, 2, 3
 
 
