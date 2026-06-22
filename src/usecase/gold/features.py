@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from src import config
+from src.framework.timeutils import to_naive_hour
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +48,8 @@ FEATURES_COUNT = [
 
 
 def _floor_hour(series: pd.Series) -> pd.Series:
-    """Parse to datetime, drop any timezone (maintenance_at is UTC) and floor to the hour."""
-    t = pd.to_datetime(series, errors="coerce")
-    if getattr(t.dt, "tz", None) is not None:
-        t = t.dt.tz_localize(None)
-    return t.dt.floor("h")
+    """Parse, drop timezone (maintenance_at is UTC) and floor to the hour (shared util)."""
+    return to_naive_hour(series)
 
 
 def _slope(y: np.ndarray) -> float:

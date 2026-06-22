@@ -11,15 +11,14 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from src.framework.common.reporting import markdown_table
 from src.framework.ingestion.validate import PARSE_OK, PARSE_REASON
 
 
 def global_summary_markdown(flagged: dict[str, pd.DataFrame]) -> str:
     """Per-source recap: original = ingested rows, valid (parse_ok), rejected (parse_ok=False)."""
-    lines = [
-        "| source | rows ingested | parse_ok | rejected (parse_ok=False) | reject rate |",
-        "|---|---|---|---|---|",
-    ]
+    headers = ["source", "rows ingested", "parse_ok", "rejected (parse_ok=False)", "reject rate"]
+    rows = []
     tot = [0, 0, 0]
     for name, df in flagged.items():
         n = len(df)
@@ -27,10 +26,10 @@ def global_summary_markdown(flagged: dict[str, pd.DataFrame]) -> str:
         ko = n - ok
         tot = [tot[0] + n, tot[1] + ok, tot[2] + ko]
         rate = f"{100 * ko / n:.2f}%" if n else "—"
-        lines.append(f"| {name} | {n} | {ok} | {ko} | {rate} |")
+        rows.append([name, n, ok, ko, rate])
     rate = f"{100 * tot[2] / tot[0]:.2f}%" if tot[0] else "—"
-    lines.append(f"| **total** | {tot[0]} | {tot[1]} | {tot[2]} | {rate} |")
-    return "\n".join(lines)
+    rows.append(["**total**", tot[0], tot[1], tot[2], rate])
+    return markdown_table(headers, rows)
 
 
 def reason_counts(df: pd.DataFrame) -> Counter:
@@ -46,9 +45,8 @@ def reason_table_markdown(df: pd.DataFrame) -> str:
     counts = reason_counts(df)
     if not counts:
         return "_No rejected row (all parse_ok)._"
-    lines = ["| reason | rows |", "|---|---|"]
-    lines += [f"| `{r}` | {n} |" for r, n in counts.most_common()]
-    return "\n".join(lines)
+    rows = [[f"`{r}`", n] for r, n in counts.most_common()]
+    return markdown_table(["reason", "rows"], rows)
 
 
 def plot_parse_reasons(df: pd.DataFrame, source: str, output_dir: Path) -> Path | None:

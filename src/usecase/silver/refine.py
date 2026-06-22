@@ -17,6 +17,7 @@ import pandas as pd
 from sqlalchemy.engine import Engine
 
 from src import config
+from src.framework.common.reporting import markdown_table
 from src.framework.ingestion.validate import PARSE_OK, PARSE_REASON
 from src.usecase.sources.registry import SOURCE_SPECS
 
@@ -99,13 +100,9 @@ def refine_silver(name: str, engine: Engine) -> tuple[pd.DataFrame, dict, dict]:
 
 def silver_summary_markdown(stats_by_source: dict[str, dict]) -> str:
     """Per-source recap: bronze rows, rejected, ingested (silver) and modifications."""
-    lines = [
-        "| source | bronze rows | rejected | silver rows | modifications |",
-        "|---|---|---|---|---|",
-    ]
+    headers = ["source", "bronze rows", "rejected", "silver rows", "modifications"]
+    rows = []
     for name, st in stats_by_source.items():
         mods = ", ".join(f"{k}={v}" for k, v in st["modifications"].items()) or "—"
-        lines.append(
-            f"| {name} | {st['bronze_rows']} | {st['rejected']} | {st['silver_rows']} | {mods} |"
-        )
-    return "\n".join(lines)
+        rows.append([name, st["bronze_rows"], st["rejected"], st["silver_rows"], mods])
+    return markdown_table(headers, rows)

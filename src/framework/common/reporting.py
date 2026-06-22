@@ -13,6 +13,17 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def markdown_table(headers: list[str], rows: list[list]) -> str:
+    """Render a GitHub-flavoured markdown table from headers and row cells.
+
+    Cells are stringified as-is (pre-format them — e.g. percentages, ``**bold**``, ``` `code` ```).
+    """
+    head = "| " + " | ".join(headers) + " |"
+    separator = "|" + "---|" * len(headers)
+    body = ["| " + " | ".join(str(c) for c in row) + " |" for row in rows]
+    return "\n".join([head, separator, *body])
+
+
 def write_dataset_report(
     run_dir: Path,
     *,

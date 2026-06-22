@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from src import config
+from src.framework.common.reporting import markdown_table
 from src.usecase.gold.features import LABEL_H, WE, WS
 
 _IDS = [config.MACHINE_COLUMN, WS, WE, "split_set"]
@@ -63,22 +64,15 @@ def summary_markdown(df: pd.DataFrame, spine_rows: int) -> str:
         f"labels: {len(groups['labels'])}, identifiers: {len(groups['identifiers'])}",
         f"- **Rows with all features present** (no history-induced NaN): {full} "
         f"({100 * full / len(df):.1f}%)",
-        "",
-        "| feature group | count |",
-        "|---|---|",
     ]
-    for k, v in groups.items():
-        if k not in ("identifiers", "labels"):
-            lines.append(f"| {k} | {len(v)} |")
-    return "\n".join(lines)
+    rows = [[k, len(v)] for k, v in groups.items() if k not in ("identifiers", "labels")]
+    return "\n".join(lines) + "\n\n" + markdown_table(["feature group", "count"], rows)
 
 
 def label_markdown(df: pd.DataFrame) -> str:
     """Per-horizon: positives, negatives, censored (NaN = unusable) and positive rate."""
-    lines = [
-        "| label | positives | negatives | censored (unusable) | positive rate |",
-        "|---|---|---|---|---|",
-    ]
+    headers = ["label", "positives", "negatives", "censored (unusable)", "positive rate"]
+    rows = []
     for col in _LABELS:
         if col not in df.columns:
             continue
@@ -87,8 +81,8 @@ def label_markdown(df: pd.DataFrame) -> str:
         neg = int((s == 0).sum())
         cens = int(s.isna().sum())
         rate = f"{100 * pos / (pos + neg):.2f}%" if (pos + neg) else "—"
-        lines.append(f"| `{col}` | {pos} | {neg} | {cens} | {rate} |")
-    return "\n".join(lines)
+        rows.append([f"`{col}`", pos, neg, cens, rate])
+    return markdown_table(headers, rows)
 
 
 def plot_label_positive_rates(df: pd.DataFrame, output_dir: Path) -> Path:
