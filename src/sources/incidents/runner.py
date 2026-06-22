@@ -13,6 +13,7 @@ import os
 
 from src import config
 from src.common.env import load_dotenv
+from src.ingestion.schemas import IncidentRow
 from src.processing.anonymization import pseudonymise_operators
 from src.processing.pipeline import ProcessingConfig, apply_processing
 from src.sources.incidents import overview
@@ -22,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "incidents"
 TABLE = "incidents"
+MODEL = IncidentRow  # Bronze validation/flagging schema
+DUP_KEYS = [config.ID_COLUMN]  # duplicate detection key
+RAW_REF = "incidents.csv"  # DataLake input (lineage)
+GOLD_ROLE = "incidents"  # feeds the unified Gold builder's incidents slot
 BRONZE_NUMERIC = []
 SILVER_NUMERIC = []  # severity is ordinal (count only); no continuous numeric in Silver
 # Features rendered as an incident-count bar chart (severity is ordinal: kept as a count

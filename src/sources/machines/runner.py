@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from src import config
+from src.ingestion.schemas import MaintenanceRow
 from src.processing.pipeline import ProcessingConfig, apply_processing
 from src.sources.machines import overview
 from src.sources.machines.loader import build_engine, load_machine_referential, load_maintenance
@@ -20,6 +21,10 @@ logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "machines"
 TABLE = "maintenance"
+MODEL = MaintenanceRow  # Bronze validation/flagging schema
+DUP_KEYS = [config.MAINTENANCE_ID_COLUMN]  # duplicate detection key
+RAW_REF = "machines.sql"  # DataLake input (lineage)
+GOLD_ROLE = "maintenance"  # feeds the unified Gold builder's maintenance slot
 BRONZE_NUMERIC = [config.MAINTENANCE_DURATION_COLUMN]
 SILVER_NUMERIC = [config.MAINTENANCE_DURATION_COLUMN]
 # Maintenance count per category (descending; horizontal bars beyond 20 modalities).

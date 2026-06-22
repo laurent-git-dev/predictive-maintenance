@@ -163,6 +163,8 @@ existing sources (the runner stays **thin**).
    `show_silver_*` from `src.notebook.render`); Gold (ch. 3) is the single table.
 8. **Document** in `CLAUDE.md` / `README.md` / this file.
 
-> Known refactor lead (see the optimisation analysis): the source↔table↔key mapping is still
-> duplicated across `registry`, `ingestion/schemas`, `database/models_bronze`, `gold/features`,
-> `silver/refine`, `orchestrator`. Consolidating it into `SourceSpec` is the main reusability win.
+> The source↔table↔key mapping is consolidated in **one place**: each source declares its
+> facts in its runner (`MODEL`, `DUP_KEYS`, `RAW_REF`, `GOLD_ROLE`, `TABLE`), aggregated into
+> `SourceSpec` (`src/sources/registry.py`). Ingestion (`load.py`), Silver (`refine.py`), Gold
+> (`features.read_silver`) and the orchestrator all read from `SPECS_BY_NAME` / `gold_sources()`
+> — no local re-declaration. Adding a Gold-contributing source needs no change in `gold/`.

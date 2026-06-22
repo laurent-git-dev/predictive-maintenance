@@ -220,11 +220,16 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
 
 def read_silver(engine) -> dict[str, pd.DataFrame]:
-    """Read the 3 ``silver.*`` tables from the database into the builder's input dict."""
-    tables = {"incidents": "incidents", "telemetry": "telemetry", "maintenance": "maintenance"}
+    """Read the ``silver.*`` tables feeding Gold into the builder's input dict.
+
+    The Gold-slot → table mapping comes from the single registry (``SourceSpec.gold_role`` /
+    ``SourceSpec.table``), so adding a Gold-contributing source needs no change here.
+    """
+    from src.sources.registry import gold_sources
+
     return {
-        key: pd.read_sql_table(table, engine, schema=config.SILVER_SCHEMA)
-        for key, table in tables.items()
+        role: pd.read_sql_table(spec.table, engine, schema=config.SILVER_SCHEMA)
+        for role, spec in gold_sources().items()
     }
 
 

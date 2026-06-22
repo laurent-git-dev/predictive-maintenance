@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from src import config
+from src.ingestion.schemas import TelemetryRow
 from src.processing.pipeline import ProcessingConfig, apply_processing
 from src.sources.telemetry import overview
 from src.sources.telemetry.loader import load_telemetry
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "telemetry"
 TABLE = "telemetry"
+MODEL = TelemetryRow  # Bronze validation/flagging schema
+DUP_KEYS = [config.MACHINE_COLUMN, config.TELEMETRY_TIMESTAMP_COLUMN]  # (machine, hour)
+RAW_REF = "telemetry.csv"  # DataLake input (lineage)
+GOLD_ROLE = "telemetry"  # spine of the unified Gold table
 # Physical measures (the 5 params minus the piece count, treated separately).
 MEASURES = [c for c in config.TELEMETRY_PARAM_COLUMNS if c != config.TELEMETRY_PIECES_COLUMN]
 BRONZE_NUMERIC = list(config.TELEMETRY_PARAM_COLUMNS)

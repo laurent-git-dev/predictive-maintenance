@@ -92,10 +92,5 @@ class BronzeMaintenance(BronzeBase, _Flagged):
     duration_hours: Mapped[float] = mapped_column(Float)
 
 
-# bronze dict key -> ORM table name (PostgreSQL table under the bronze schema)
-BRONZE_TABLES = {
-    "incidents": "incidents",
-    "telemetry": "telemetry",
-    "machine": "machine",
-    "machines": "maintenance",
-}
+# The source→table mapping lives in the single registry (``SourceSpec.table``); these ORM
+# classes define the Bronze schema only (managed by Alembic).

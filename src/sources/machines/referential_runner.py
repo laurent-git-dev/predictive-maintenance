@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 
 from src import config
+from src.ingestion.schemas import MachineRow
 from src.processing.pipeline import ProcessingConfig
 from src.sources.machines import overview
 from src.sources.machines.loader import build_engine, load_machine_referential
@@ -22,8 +23,12 @@ logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "machine"
 TABLE = config.MACHINE_TABLE
+MODEL = MachineRow  # Bronze validation/flagging schema
+DUP_KEYS = [config.MACHINE_COLUMN]  # one row per machine (PK)
+RAW_REF = "machines.sql"  # DataLake input (lineage)
 # Dimension consumed only as a Bronze referential: its attributes are denormalised into
 # silver.maintenance (merge-first star schema), so it has no standalone Silver table.
+# No GOLD_ROLE: it does not feed the unified Gold builder directly.
 BRONZE_ONLY = True
 # Dimension: one row per machine -> no per-machine boxplot (no grouping column).
 MACHINE_COL = ""

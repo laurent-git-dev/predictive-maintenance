@@ -12,8 +12,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src import config
-
 _MACHINE_PATTERN = r"^MACH-\d{2,}$"
 Signal = Annotated[int, Field(ge=0, le=1)]  # binary 0/1 flag
 
@@ -76,10 +74,5 @@ class MaintenanceRow(_Row):
     duration_hours: Annotated[float, Field(ge=0)]
 
 
-# source name (bronze dict key) -> (model, duplicate-key columns)
-INGESTION_SCHEMAS: dict[str, tuple[type[_Row], list[str]]] = {
-    "incidents": (IncidentRow, [config.ID_COLUMN]),
-    "telemetry": (TelemetryRow, [config.MACHINE_COLUMN, config.TELEMETRY_TIMESTAMP_COLUMN]),
-    "machine": (MachineRow, [config.MACHINE_COLUMN]),
-    "machines": (MaintenanceRow, [config.MAINTENANCE_ID_COLUMN]),
-}
+# The source↔model↔duplicate-key mapping lives in the single registry (``SourceSpec.model`` /
+# ``SourceSpec.dup_keys``); each source declares it in its runner.

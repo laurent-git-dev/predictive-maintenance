@@ -14,9 +14,9 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from src.database.engine import ensure_schema
-from src.database.models_bronze import BRONZE_TABLES, SCHEMA, BronzeBase
-from src.ingestion.schemas import INGESTION_SCHEMAS
+from src.database.models_bronze import SCHEMA, BronzeBase
 from src.ingestion.validate import validate_and_flag
+from src.sources.registry import SPECS_BY_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +29,9 @@ def ensure_bronze_tables(engine: Engine) -> None:
 
 def ingest_bronze(name: str, raw_df: pd.DataFrame, engine: Engine | None = None) -> tuple:
     """Validate/flag ``raw_df`` then load into ``bronze.<table>``; returns ``(flagged, status)``."""
-    model, dup_keys = INGESTION_SCHEMAS[name]
-    flagged = validate_and_flag(raw_df, model, dup_keys)
-    table = BRONZE_TABLES[name]
+    spec = SPECS_BY_NAME[name]
+    flagged = validate_and_flag(raw_df, spec.model, spec.dup_keys)
+    table = spec.table
 
     if engine is not None:
         ensure_bronze_tables(engine)

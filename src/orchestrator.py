@@ -33,17 +33,9 @@ from src.ingestion.load import ingest_bronze
 from src.lineage.quality import check_quality
 from src.lineage.tracker import Batch
 from src.silver.refine import refine_silver
-from src.sources.registry import SOURCE_SPECS, SourceSpec
+from src.sources.registry import SOURCE_SPECS, SourceSpec, gold_sources
 
 logger = logging.getLogger(__name__)
-
-# DataLake input identifier per source (for lineage input_ref).
-_RAW_REF = {
-    "incidents": "incidents.csv",
-    "telemetry": "telemetry.csv",
-    "machine": "machines.sql",
-    "machines": "machines.sql",
-}
 
 
 def _artifacts_base(source: str) -> Path:
@@ -88,7 +80,7 @@ def run_source(spec: SourceSpec, engine=None, batch: Batch | None = None) -> dic
             "ingest",
             layer="bronze",
             source=spec.name,
-            input_ref=f"datalake/{_RAW_REF.get(spec.name, spec.name)}",
+            input_ref=f"datalake/{spec.raw_ref or spec.name}",
             output_ref=out_ref,
         ) as st:
             flagged, ingest_status = ingest_bronze(spec.name, bronze_df, engine)
@@ -265,11 +257,10 @@ def run_pipeline(load_db: bool = True) -> dict:
     for spec in SOURCE_SPECS:
         results[spec.name] = run_source(spec, engine, batch)
 
-    # Single Gold table from the three Silver frames (maintenance = the `machines` source).
+    # Single Gold table from the Silver frames; each Gold slot maps to its source via the
+    # registry (``gold_role``), e.g. maintenance <- the `machines` source.
     silver_by_source = {
-        "incidents": results["incidents"]["silver_df"],
-        "telemetry": results["telemetry"]["silver_df"],
-        "maintenance": results["machines"]["silver_df"],
+        role: results[spec.name]["silver_df"] for role, spec in gold_sources().items()
     }
     results["gold"] = run_gold(silver_by_source, engine, batch)
 
