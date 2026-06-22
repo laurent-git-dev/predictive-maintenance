@@ -29,6 +29,9 @@ L'objectif immédiat est de :
 | Manipulation données | pandas |
 | Visualisation | matplotlib |
 | SQL / ORM | SQLAlchemy (SQLite pour l'ingestion du dump, PostgreSQL pour la mise en base) |
+| Migrations schéma | Alembic (schémas `bronze` + `meta` ; `alembic upgrade head`) |
+| Validation données | Pydantic (flagging `parse_ok`/`parse_reason` à l'ingestion Bronze) |
+| Traçabilité | lineage `meta.processing_runs` (1 ligne/étape, regroupée par `batch_id`) |
 | Base de données | PostgreSQL (Docker, `docker-compose.yml`) |
 | Stats | scipy |
 | Qualité code | ruff, black |
@@ -47,23 +50,34 @@ predictive_maintenance/
 ├── uv.lock                 ← versions verrouillées (uv)
 ├── .python-version         ← Python 3.12
 ├── .dvc/                   ← config DVC (ne pas modifier manuellement)
+├── alembic/                ← migrations Alembic (env.py + versions/) — schéma bronze
+├── alembic.ini             ← config Alembic (URL injectée depuis src/database/engine)
 ├── docker-compose.yml      ← service PostgreSQL (mise en base)
 ├── data/raw/               ← sources d'entrée (2 CSV + 1 SQL) ; jamais modifiées
 ├── artifacts/
 │   ├── ingestions/<source>/<run>/{bronze,silver}/ ← graphes + rapports par couche
 │   └── analyses/cross_source/
 ├── src/
-│   ├── config.py           ← chemins, schémas, réglages DB, BRONZE/SILVER_SCHEMA
-│   ├── orchestrator.py     ← run_pipeline : Bronze→Silver × chaque source + cross-source
+│   ├── config.py           ← chemins, schémas, réglages DB, BRONZE/SILVER/GOLD_SCHEMA
+│   ├── orchestrator.py     ← run_pipeline : Bronze+Silver × source, puis run_gold (1 table) + cross-source
 │   ├── common/             ← partagé : metrics, registry, reporting, env,
 │   │                          profiling (compréhension per-feature + graphes + status),
 │   │                          quality (critères OK/NOK par feature), processing_summary
 │   │                          (résumé Bronze→Silver), overview (stub global par couche),
 │   │                          stage (run_layer : compréhension + rapports + mise en base)
 │   ├── processing/         ← OUTILS MUTUALISÉS : anonymization, dedup, transformation
-│   │                          (encode), imputation, outliers, normalization, pipeline
-│   │                          (apply_processing : dedup→encode→impute→outliers→normalize)
+│   │                          (encode), imputation, interpolation, outliers, normalization,
+│   │                          pipeline (apply_processing : dedup→interpolate→encode→impute→outliers→normalize)
+│   ├── gold/               ← features.py : build_gold_features / build_gold_from_db (lit silver.*) →
+│   │                          table UNIQUE gold.features (machine×heure) ; stats.py (stats OVERVIEW)
+│   ├── ingestion/          ← Bronze : schemas.py (Pydantic), validate.py (parse_ok/parse_reason),
+│   │                          load.py (validate+flag+TRUNCATE/append), stats.py (récap ingestion)
+│   ├── silver/             ← refine.py : lit bronze.* (DB), politique de rejet (duplicate/missing
+│   │                          corrigeables), traitements existants → silver.* + stats de modifications
+│   ├── lineage/            ← traçabilité : models.py (ORM meta.processing_runs), tracker.py
+│   │                          (Batch + step : début/fin/status/stats/git sha/hash), quality.py (soft)
 │   ├── database/           ← engine (PostgreSQL, ensure_schema) + loader (to_sql par schéma)
+│   │                          + models_bronze.py (ORM des 4 tables bronze, gérées par Alembic)
 │   ├── sources/            ← 1 package/source (runner MINCE : load_bronze/to_silver + hooks)
 │   │   ├── registry.py     ← SOURCE_SPECS (déclaratif : load_bronze/to_silver/numeric/table
 │   │   │                      + hooks count/keyword/heatmap/timeseries/overview/processing)
@@ -71,23 +85,40 @@ predictive_maintenance/
 │   │   │                      runner=maintenance + referential_runner=dimension machine)
 │   └── analyses/           ← analyses inter-sources (joins, plots, runner)
 ├── scripts/
-│   ├── run_pipeline.py     ← ORCHESTRATEUR : tout, toutes sources, Bronze+Silver (commande unique)
+│   ├── run_pipeline.py     ← ORCHESTRATEUR : tout, Bronze+Silver+Gold (commande unique)
 │   └── run_{incidents,telemetry,machines,cross_source}.py ← par source/analyse
 └── notebooks/
     └── pipeline.ipynb      ← notebook UNIQUE, organisé PAR COUCHE (non DVC)
 ```
 
 > **Architecture médaillon** : pour chaque source, **Bronze** (données brutes ;
-> `operator_name`/`operator_badge` pseudonymisés dès le Bronze) puis **Silver**
-> (traitement : feature engineering, dédoublonnage, encodage texte→value, imputation,
-> outliers, normalisation). `to_silver` renvoie `(df, report)` ; le mapping texte→value
-> est tracé dans `…/silver/text_encodings.json`. Chaque couche produit la **même
-> compréhension per-feature** (synthèse adaptée au type + **status OK/NOK** par feature
-> + graphes) et une **table** dans son schéma PostgreSQL (`bronze.*`, `silver.*`).
-> **Gold** viendra ensuite (même mécanique). Tout est **mutualisé** dans `src/common/`
-> (`stage.run_layer`, `profiling`, `quality`) ; les runners de source sont **minces** :
-> ils déclarent `load_bronze`, `to_silver`, `BRONZE_NUMERIC`/`SILVER_NUMERIC` et des
-> **hooks optionnels** (voir « Ajouter une source »). Orchestrateur : `src/orchestrator.py`.
+> `operator_name`/`operator_badge` pseudonymisés dès le Bronze ; à l'ingestion, **validation
+> Pydantic non destructive** qui ajoute `parse_ok`/`parse_reason` — type/domaine/manquants/
+> doublons flagués sans modifier les valeurs — puis chargement dans `bronze.*`
+> via SQLAlchemy, schéma géré par **Alembic**), puis **Silver** qui **part des tables
+> `bronze.*` en base** (`src/silver/refine.py`) : **politique de rejet** (lignes
+> `parse_ok=False` dont les anomalies sont `duplicate`/`missing` = **corrigeables** par les
+> traitements → gardées ; `type`/`domain`/`format`/`range`/`invalid` → **rejetées**), puis
+> **traitement** (dédoublonnage, fusion dimension, encodage texte→value, imputation,
+> interpolation temporelle, normalisation ; `apply_processing`) et écriture `silver.*`
+> (`to_sql replace`) + **stats de modifications** (lignes dédoublonnées, valeurs imputées/
+> interpolées, colonnes encodées/normalisées, lignes rejetées). `to_silver` renvoie `(df, report)` ;
+> le mapping texte→value est tracé dans `…/silver/text_encodings.json`. Bronze et Silver
+> produisent la **même compréhension per-feature** (synthèse adaptée au type + **status
+> OK/NOK** + graphes) et une **table par source** dans leur schéma (`bronze.*`, `silver.*`).
+> **Gold = UNE seule table cross-source** `gold.features`, grain **(machine_id, fenêtre 1 h)**,
+> **construite à partir des tables `silver.*` en base** (`src/gold/features.py` :
+> `build_gold_from_db` lit `silver.*`, `build_gold_features` à partir de frames). **Cas
+> d'usage** : prédire une **panne = incident de sévérité ≥ 4** aux horizons **+6/12/24/48 h**.
+> Instant de décision **t = `window_end`** : les features regardent en arrière jusqu'à l'heure
+> courante **incluse**, les **labels** strictement **après** `t` (NaN si censuré en fin de série,
+> ligne conservée). Groupes : **mémoire** (mean/max/std glissants), **tendance** (pente OLS),
+> **anomalie** (z-scores), **contexte** (incidents / signaux / maintenance) et **labels**
+> (4 horizons, multi-cible). Sans fuite (passé/présent). Stats Gold : `src/gold/stats.py`.
+> Tout est **mutualisé** dans `src/common/` (`stage.run_layer`, `profiling`, `quality`) ;
+> les runners de source sont **minces** : `load_bronze`, `to_silver`,
+> `BRONZE_NUMERIC`/`SILVER_NUMERIC` + **hooks optionnels**. Orchestrateur :
+> `src/orchestrator.py` (boucle Bronze+Silver par source, puis **un** `run_gold`).
 >
 > **4 sources Bronze** dans `SOURCE_SPECS` : `incidents`, `telemetry`, `machine`
 > (dimension/référentiel ; titres notebook *Machines/machine*) et `machines` (faits de
@@ -95,16 +126,19 @@ predictive_maintenance/
 > `maintenance`. La dimension `machine` est **Bronze-only** (`BRONZE_ONLY = True`,
 > contrôles de cohérence en Bronze) : ses attributs sont **fusionnés en tête** de
 > `to_silver` de maintenance (merge-first, star schema) — donc **pas de `silver.machine`**.
+> **Gold n'a qu'UNE table** (`gold.features`), pas une par source.
 >
-> **Notebook organisé par couche, titres numérotés & repliables** (niveaux : `##` phase
-> → `###` source → `####` sous-section → `#####` feature) : `## 1. Bronze (raw)` →
-> `## 2. Processing Bronze → Silver` → `## 3. Silver (treated)` → `## 4. Database` →
-> `## 5. Cross-source`. En **Bronze** et **Silver**, chaque source d'une couche se décline
-> en sous-sections **« … - Per feature »**, **« … - Overview »** et (Bronze) **« … - Inline
-> analysis »** (graphes exploratoires **propres au notebook**) ; chaque couche se termine par
-> **« <Couche> - Global overview »**. En **Processing**, le traitement est documenté
-> **par feature** (`##### 2.x.i <feature>`). Bronze a 4 sources ; **Processing et Silver n'en
-> ont que 3** (`incidents`, `telemetry`, `maintenance` — la dimension `machine` est fusionnée).
+> **Notebook organisé en 3 chapitres** (hors `## 0. Setup`) : `## 1. BRONZE (raw data)` →
+> `## 2. SILVER (treated data)` → `## 3. GOLD (ready for training)`. Bronze a **4 sources**,
+> Silver **3**, Gold **1** (`gold.features`). **Chaque source** suit le **même gabarit** :
+> `### X.Y <Source>` → `#### X.Y.1 PREVIEW` (compréhension per-feature) → `#### X.Y.2
+> PROCESSING` (transformation per-feature : ingestion/pseudonymisation en Bronze, traitement
+> Bronze→Silver en Silver, build par groupe en Gold) → `#### X.Y.3 OVERVIEW` (**Permanent
+> Analysis** = graphes reproductibles + **Inline Analysis** = exploration notebook). Le
+> contenu **transverse** (mise en base, cohérence/analyse cross-source, synthèse, global
+> overview) vit dans un **appendice par chapitre** (`### X.N … (appendix)`). Les graphes
+> per-feature et le badge violet **(NEW)** apparaissent sous PREVIEW/PROCESSING. La phase Gold
+> reste un **placeholder** à compléter (cible, sélection de features…).
 
 ---
 
@@ -180,12 +214,33 @@ docker compose ps           # statut / santé
 docker compose stop         # arrête (les données persistent dans le volume pgdata)
 ```
 **Bronze** : 4 tables — `bronze.{incidents, telemetry, machine, maintenance}` (brut,
-opérateurs pseudonymisés). **Silver** : 3 tables — `silver.{incidents, telemetry,
+opérateurs pseudonymisés ; **schéma géré par Alembic**, PK surrogate `id`, + colonnes
+`parse_ok`/`parse_reason` ; toutes les lignes ingérées, les invalides étant **flaguées**,
+pas supprimées). Créer/mettre à jour le schéma : `uv run alembic upgrade head` (l'ingestion
+fait aussi un `create_all` idempotent en filet de sécurité). **Silver** : 3 tables — `silver.{incidents, telemetry,
 maintenance}` (la dimension `machine` est Bronze-only → **pas de `silver.machine`**).
 `silver.maintenance` est **enrichie** des attributs de la dimension `machine` (criticité,
-ligne, atelier, modèle, capacités, date de mise en service + `machine_age_years`). Les
-schémas `bronze`/`silver` sont créés au besoin (`CREATE SCHEMA IF NOT EXISTS`) et les
-tables **rechargées entièrement** (`to_sql` replace) à chaque run → idempotent.
+ligne, atelier, modèle, capacités, date de mise en service) + encodages `*_code`.
+**Gold** : **1 seule table** — `gold.features`, grain **(machine_id, fenêtre 1 h)**,
+construite à partir des 3 Silver (spine télémétrie + agrégats incidents/maintenance +
+dimension + feature engineering ; voir `src/gold/features.py`). Les schémas `bronze`/`silver`/`gold`
+sont créés au besoin (`CREATE SCHEMA IF NOT EXISTS`) et les tables **rechargées entièrement**
+(`to_sql` replace) à chaque run → idempotent.
+
+### Batch & traçabilité (lineage)
+
+Chaque exécution de `run_pipeline` ouvre un **batch** (`batch_id`) et **chaque étape**
+(ingestion Bronze, refine Silver, build Gold) écrit **une ligne** dans **`meta.processing_runs`**
+via `src/lineage/tracker.py` (`Batch` + `batch.step(...)`, gestionnaire de contexte) :
+`step`, `layer`, `source`, `input_ref`/`output_ref` (ex. `datalake/telemetry.csv` →
+`bronze.telemetry` → `silver.telemetry` → `gold.features`), `started_at`/`ended_at`/
+`duration_s`, `status` (success/failed), `rows_read`/`rows_ingested`/`rows_rejected`,
+`quality_ok`, `code_version` (git sha), `output_hash` (empreinte du contenu) et `details`
+(JSON : modifications, parse_ko, erreur). **Lignage complet raw→gold** :
+`SELECT … WHERE batch_id = X ORDER BY started_at`. Les **contrôles qualité** sont **soft**
+(`src/lineage/quality.py` : unicité du grain Gold, continuité du nombre de lignes vs batch
+précédent) — enregistrés + warning, sans bloquer. Vue : `lineage_markdown(engine)` (appendice
+notebook « Batch & traceability »). Schéma `meta` géré par Alembic (`alembic upgrade head`).
 
 ### DVC — versioning des données
 
@@ -317,12 +372,13 @@ artifacts/ingestions/<source>/<run>/{bronze,silver}/
 | `dataset_report.md` | Rapport partageable : profil **per-feature** (synthèse + status + graphes) |
 | `text_encodings.json` | (Silver) traçabilité des encodages texte→value appliqués (`value → code`) |
 
-> Features numériques par source et couche : **incidents** — Bronze = ∅ (`severity` n'a
-> qu'un graphe de comptage) ; Silver = `n_active_signals`, `confidence_index`.
-> **telemetry** — les 5 paramètres (Bronze = Silver). **machines** (maintenance) —
-> `duration_hours`. **machine** (dimension) — `max_daily_capacity`,
-> `max_hourly_capacity_pieces` (pas de boxplot par machine : 1 ligne/machine). La synthèse
-> couvre **toutes** les colonnes.
+> Features numériques (Bronze/Silver) par source : **incidents** — Bronze = ∅, Silver = ∅
+> (`severity` n'a qu'un graphe de comptage). **telemetry** — les 5 paramètres (Bronze =
+> Silver). **machines** (maintenance) — `duration_hours`. **machine** (dimension) —
+> `max_daily_capacity`, `max_hourly_capacity_pieces` (pas de boxplot par machine : 1
+> ligne/machine). La synthèse couvre **toutes** les colonnes. La couche **Gold** (table
+> unique `gold.features`) a ses propres listes de features numériques/comptage définies dans
+> `src/gold/features.py` (`FEATURES_NUMERIC` / `FEATURES_COUNT`).
 
 Le registre `runs_registry.json` est mis à jour automatiquement (lignes Bronze/Silver
 + statut de mise en base par schéma).
@@ -415,11 +471,12 @@ uv run python scripts/run_machines.py   # lance la source maintenance (la dimens
 
 **Source `machines` (maintenance, faits ; notebook : *Machines/maintenance*)** — runner `src/sources/machines/runner.py` :
 `to_silver` fusionne **d'abord** la dimension `machine` (merge-first, jointure `machine_id`
-= tous les attributs, dont `commissioning_date`), puis dérive les features (calendaires sur
-`maintenance_at` + `machine_age_years`) et encode (`maintenance_type`, `action_type`,
-`component`, `criticality`, `production_line`, `location`, `model`). `duration_hours` est
-laissée **brute**. Numérique : `duration_hours`. Tables : `bronze.maintenance`,
-`silver.maintenance` (enrichie). C'est la **seule** source Silver issue de `machines.sql`.
+= tous les attributs, dont `commissioning_date`), puis encode (`maintenance_type`,
+`action_type`, `component`, `criticality`, `production_line`, `location`, `model`).
+`duration_hours` est laissée **brute** (numérique Silver). Tables : `bronze.maintenance`,
+`silver.maintenance` (enrichie). C'est la **seule** source Silver issue de `machines.sql` ;
+ses événements sont ensuite **agrégés** au grain (machine, heure) dans `gold.features`
+(comptes, durées, `machine_age_years` recalculé à l'heure) par `src/gold/features.py`.
 
 **Source `machine` (dimension ; notebook : *Machines/machine*)** — runner `src/sources/machines/referential_runner.py` :
 **Bronze-only** (`BRONZE_ONLY = True`) — pas de `silver.machine`. Le **Bronze vérifie la
@@ -488,9 +545,13 @@ compréhension per-feature, rapports, mise en base — est mutualisée dans
      - `BRONZE_NUMERIC` / `SILVER_NUMERIC` (features numériques à grapher par couche) ;
      - `load_bronze(input_path=None) -> df` : brut typé (+ `pseudonymise_operators`
        si PII opérateurs, via `src.processing.anonymization`) ;
-     - `to_silver(bronze_df) -> (df, report)` : feature engineering + `apply_processing(...)`
-       (`src.processing` : dédoublonnage / encodage / imputation / outliers / normalisation
-       **déjà existants**). `report["encode"]` alimente `text_encodings.json` ;
+     - `to_silver(bronze_df) -> (df, report)` : **traitement seul** via `apply_processing(...)`
+       (`src.processing` : dédoublonnage / fusion dimension / encodage / imputation /
+       interpolation / normalisation **déjà existants**). `report["encode"]` alimente
+       `text_encodings.json` ;
+     - **Gold** : pas de `to_gold` par source. La table unique `gold.features` est construite
+       par `src/gold/features.py` (`build_gold_features`) à partir des Silver ; pour qu'une
+       nouvelle source y contribue, l'intégrer au builder (spine / agrégat / jointure) ;
    - **hooks optionnels** (lus par `getattr` dans `_spec`, donc facultatifs) :
      `COUNT_FEATURES`/`COUNT_LABEL` (barres de comptage), `KEYWORD_BARS`
      `(feature, mots-clés, titre)`, `HEATMAPS` `(row, col)`, `TIMESERIES`
@@ -501,23 +562,26 @@ compréhension per-feature, rapports, mise en base — est mutualisée dans
      boxplot par machine sur une dimension), `PROCESSING` (la `ProcessingConfig` :
      `dedup`/`encode`/`impute`/`outliers`/`normalize`), `BRONZE_ONLY` (`True` = source
      Bronze-only, sans table Silver — ex. dimension fusionnée ailleurs).
-3. **Aucun traitement en Bronze** (sauf pseudonymisation PII opérateurs). Tout le
-   reste (encodage texte→valeur, imputation, outliers, features dérivées) est en
-   **Silver** via `to_silver`, en réutilisant `src.processing`.
+3. **Aucun traitement en Bronze** (sauf pseudonymisation PII opérateurs). Le **traitement**
+   (encodage texte→valeur, imputation, interpolation, normalisation, fusion dimension) est
+   en **Silver** via `to_silver`, en réutilisant `src.processing`. La **création de features
+   dérivées** se fait au grain (machine, heure) dans le builder **Gold unique**
+   (`src/gold/features.py`).
 4. **Enregistrer la source dans `src/sources/registry.py`** (`SOURCE_SPECS`) via
    `_spec(<nom>_runner)`. → l'orchestrateur (`run_pipeline`) la prend automatiquement
-   en charge (Bronze + Silver + mise en base par schéma).
+   en charge (Bronze + Silver + mise en base par schéma ; Gold via le builder unifié).
 5. **Qualité (optionnel mais recommandé)** : déclarer les critères de status dans
    `src/common/quality.py` — `FEATURE_CHECKS` (par nom de feature) ou
    `SOURCE_FEATURE_CHECKS` (scopé `(source, feature)`), en réutilisant les `Check`
    existants ou en ajoutant un prédicat `(profile, series, df) -> bool`.
 6. **`scripts/run_<nom>.py`** : wrapper CLI minimal (`run_source_by_name("<nom>")`,
    fixe le backend `Agg`, option `--no-db`).
-7. **Notebook** (organisé **par couche**) : ajouter la source dans **les trois phases**
-   `## 1. Bronze` / `## 2. Processing` / `## 3. Silver` (markdown `### <Source> - …` +
-   cellule `show_per_feature_spec(SPECS["<nom>"], …)` / `show_processing(...)`).
+7. **Notebook** (organisé **par couche**) : ajouter la source dans `## 1. Bronze` /
+   `## 2. Processing B→S` / `## 3. Silver` (markdown `### <Source> - …` + cellules
+   `show_per_feature_spec(...)` / `show_processing(...)`). Les phases **4/5** portent sur la
+   table unique `gold.features` (pas par source).
 8. **Documenter** dans `CLAUDE.md` et `README.md`.
 
 > Rappel : **chaque couche produit `run_report.md` ET `dataset_report.md`** (per-feature).
-> La mise en base utilise `to_sql` replace par schéma (`bronze.*` / `silver.*`,
+> La mise en base utilise `to_sql` replace par schéma (`bronze.*` / `silver.*` / `gold.*`,
 > idempotent) et est ignorée si la DB est éteinte.

@@ -1,12 +1,14 @@
-"""Medallion orchestrator: run every source through Bronze then Silver layers.
+"""Medallion orchestrator: run every source through Bronze and Silver, then build Gold.
 
 For each source declared in ``src/sources/registry.py``:
 1. **Bronze** : raw data (operators pseudonymised) → per-feature understanding +
    reports + load into the ``bronze`` schema.
-2. **Silver** : treated data (feature engineering, encoding, imputation, outliers)
-   → same per-feature reports + load into the ``silver`` schema.
+2. **Silver** : treated data (dedup, dimension merge, encoding, imputation,
+   interpolation, normalization) → same reports + load into the ``silver`` schema.
 
-Then the cross-source analysis is run. One command, idempotent (tables reloaded).
+Then a **single Gold table** (``gold.features``, one row per ``(machine_id, hour)``) is
+built from the three Silver frames (``src/gold/features.py``) and a cross-source analysis
+is run. One command, idempotent (tables reloaded).
 """
 
 from __future__ import annotations
@@ -21,9 +23,27 @@ from src.common.env import load_dotenv
 from src.common.registry import upsert_run
 from src.common.stage import run_layer
 from src.database import engine as db_engine
+from src.gold.features import (
+    FEATURES_COUNT,
+    FEATURES_NUMERIC,
+    build_gold_features,
+    build_gold_from_db,
+)
+from src.ingestion.load import ingest_bronze
+from src.lineage.quality import check_quality
+from src.lineage.tracker import Batch
+from src.silver.refine import refine_silver
 from src.sources.registry import SOURCE_SPECS, SourceSpec
 
 logger = logging.getLogger(__name__)
+
+# DataLake input identifier per source (for lineage input_ref).
+_RAW_REF = {
+    "incidents": "incidents.csv",
+    "telemetry": "telemetry.csv",
+    "machine": "machines.sql",
+    "machines": "machines.sql",
+}
 
 
 def _artifacts_base(source: str) -> Path:
@@ -31,8 +51,9 @@ def _artifacts_base(source: str) -> Path:
     return config.PROJECT_ROOT / "artifacts" / "ingestions" / dirname
 
 
-def run_source(spec: SourceSpec, engine=None) -> dict:
-    """Run one source through the Bronze and Silver layers."""
+def run_source(spec: SourceSpec, engine=None, batch: Batch | None = None) -> dict:
+    """Run one source through the Bronze and Silver layers (returns its Silver frame)."""
+    batch = batch or Batch(engine)
     logger.info("=== Source: %s ===", spec.name)
     run_id = datetime.now().strftime("%Y%m%d%H%M")
     base = _artifacts_base(spec.name)
@@ -40,6 +61,8 @@ def run_source(spec: SourceSpec, engine=None) -> dict:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     bronze_df = spec.load_bronze()
+    # Bronze profiling + reports + CSV (no generic DB write); the DB load goes through the
+    # validating ingestion (Pydantic flags + SQLAlchemy/Alembic-managed bronze.* tables).
     bronze = run_layer(
         bronze_df,
         source=spec.name,
@@ -57,8 +80,29 @@ def run_source(spec: SourceSpec, engine=None) -> dict:
         bars_by_machine=spec.bars_by_machine,
         cumulative=spec.cumulative,
         feature_plots=spec.feature_plots,
-        engine=engine,
+        engine=None,
     )
+    if engine is not None:
+        out_ref = f"{config.BRONZE_SCHEMA}.{spec.table}"
+        with batch.step(
+            "ingest",
+            layer="bronze",
+            source=spec.name,
+            input_ref=f"datalake/{_RAW_REF.get(spec.name, spec.name)}",
+            output_ref=out_ref,
+        ) as st:
+            flagged, ingest_status = ingest_bronze(spec.name, bronze_df, engine)
+            qok, qdet = check_quality(out_ref, flagged, engine, batch.batch_id)
+            qdet["parse_ko"] = ingest_status["parse_ko"]
+            st.set(
+                rows_read=len(bronze_df),
+                rows_ingested=ingest_status["rows"],
+                rows_rejected=0,
+                quality_ok=qok,
+                details=qdet,
+                output_df=flagged,
+            )
+        bronze["db"] = ingest_status["db"]
 
     if spec.bronze_only:
         # Bronze-only source (e.g. the machine dimension): no standalone Silver table.
@@ -73,9 +117,31 @@ def run_source(spec: SourceSpec, engine=None) -> dict:
                 "silver_db": "n/a (bronze-only source)",
             },
         )
-        return {"run_dir": str(run_dir), "bronze": bronze, "silver": None}
+        return {"run_dir": str(run_dir), "bronze": bronze, "silver": None, "silver_df": None}
 
-    silver_df, report = spec.to_silver(bronze_df)
+    # Silver starts from the ingested bronze.* tables (reject/correct + treatments). When the
+    # DB is unavailable, fall back to the in-memory raw bronze so the pipeline still runs.
+    if engine is not None:
+        in_ref, out_ref = (
+            f"{config.BRONZE_SCHEMA}.{spec.table}",
+            f"{config.SILVER_SCHEMA}.{spec.table}",
+        )
+        with batch.step(
+            "refine", layer="silver", source=spec.name, input_ref=in_ref, output_ref=out_ref
+        ) as st:
+            silver_df, report, sstats = refine_silver(spec.name, engine)
+            qok, qdet = check_quality(out_ref, silver_df, engine, batch.batch_id)
+            qdet.update(sstats["modifications"])
+            st.set(
+                rows_read=sstats["bronze_rows"],
+                rows_ingested=sstats["silver_rows"],
+                rows_rejected=sstats["rejected"],
+                quality_ok=qok,
+                details=qdet,
+                output_df=silver_df,
+            )
+    else:
+        silver_df, report = spec.to_silver(bronze_df)
     silver = run_layer(
         silver_df,
         source=spec.name,
@@ -108,7 +174,69 @@ def run_source(spec: SourceSpec, engine=None) -> dict:
             "silver_db": silver["db"],
         },
     )
-    return {"run_dir": str(run_dir), "bronze": bronze, "silver": silver}
+    return {"run_dir": str(run_dir), "bronze": bronze, "silver": silver, "silver_df": silver_df}
+
+
+def run_gold(silver_by_source: dict, engine=None, batch: Batch | None = None) -> dict:
+    """Build the single Gold feature table from the Silver frames and load it.
+
+    ``silver_by_source`` maps ``incidents`` / ``telemetry`` / ``maintenance`` to their
+    Silver DataFrame (the maintenance frame comes from the ``machines`` source).
+    """
+    batch = batch or Batch(engine)
+    logger.info("=== Gold: unified feature table (machine x hour) ===")
+    run_id = datetime.now().strftime("%Y%m%d%H%M")
+    run_dir = config.GOLD_ARTIFACTS_DIR / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Gold starts from the silver.* DB tables; fall back to in-memory frames if no DB.
+    out_ref = f"{config.GOLD_SCHEMA}.{config.GOLD_TABLE}"
+    with batch.step(
+        "build",
+        layer="gold",
+        source="gold",
+        input_ref=f"{config.SILVER_SCHEMA}.*",
+        output_ref=out_ref,
+    ) as st:
+        gold_df = (
+            build_gold_from_db(engine)
+            if engine is not None
+            else build_gold_features(silver_by_source)
+        )
+        qok, qdet = check_quality(
+            out_ref, gold_df, engine, batch.batch_id, grain=[config.MACHINE_COLUMN, "window_start"]
+        )
+        st.set(
+            rows_read=len(gold_df),
+            rows_ingested=len(gold_df),
+            rows_rejected=0,
+            quality_ok=qok,
+            details=qdet,
+            output_df=gold_df,
+        )
+    gold = run_layer(
+        gold_df,
+        source="gold",
+        layer="gold",
+        run_dir=run_dir,
+        numeric_features=FEATURES_NUMERIC,
+        machine_col=config.MACHINE_COLUMN,
+        table=config.GOLD_TABLE,
+        schema=config.GOLD_SCHEMA,
+        count_features=FEATURES_COUNT,
+        count_label="machine-hours",
+        engine=engine,
+    )
+    upsert_run(
+        config.GOLD_RUNS_REGISTRY_PATH,
+        {
+            "run_id": run_id,
+            "folder": run_dir.relative_to(config.PROJECT_ROOT).as_posix(),
+            "gold_rows": gold["rows"],
+            "gold_db": gold["db"],
+        },
+    )
+    return {"run_dir": str(run_dir), "gold": gold}
 
 
 def _get_engine(load_db: bool):
@@ -127,13 +255,23 @@ def run_source_by_name(name: str, load_db: bool = True) -> dict:
 
 
 def run_pipeline(load_db: bool = True) -> dict:
-    """Run all sources (Bronze + Silver) then the cross-source analysis."""
+    """Run all sources (Bronze + Silver), build the unified Gold table, then cross-source."""
     load_dotenv(config.PROJECT_ROOT / ".env")
     engine = _get_engine(load_db)
+    batch = Batch(engine)  # one batch_id for the whole pipeline run (lineage raw -> gold)
+    logger.info("=== Batch %s (code %s) ===", batch.batch_id, batch.code_version)
 
     results: dict = {}
     for spec in SOURCE_SPECS:
-        results[spec.name] = run_source(spec, engine)
+        results[spec.name] = run_source(spec, engine, batch)
+
+    # Single Gold table from the three Silver frames (maintenance = the `machines` source).
+    silver_by_source = {
+        "incidents": results["incidents"]["silver_df"],
+        "telemetry": results["telemetry"]["silver_df"],
+        "maintenance": results["machines"]["silver_df"],
+    }
+    results["gold"] = run_gold(silver_by_source, engine, batch)
 
     logger.info("=== Cross-source analysis ===")
     results["cross_source"] = {"run_dir": str(run_cross_source())}

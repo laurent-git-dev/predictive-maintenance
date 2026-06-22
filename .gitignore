@@ -22,10 +22,11 @@ data/external/*
 !data/**/.gitkeep
 !data/**/*.dvc
 
-# Datasets produits par couche (bronze/silver) — potentiellement volumineux,
+# Datasets produits par couche (bronze/silver/gold) — potentiellement volumineux,
 # et le bronze peut contenir du texte libre. Versionnables via DVC au besoin.
 artifacts/ingestions/**/bronze/*.csv
 artifacts/ingestions/**/silver/*.csv
+artifacts/gold/**/*.csv
 
 # Clés de pseudonymisation (mapping hash -> identité réelle) : jamais dans le repo.
 *.mapping.json

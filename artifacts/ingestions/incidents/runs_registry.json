@@ -1,8 +1,8 @@
 {
   "runs": [
     {
-      "run_id": "202606221057",
-      "folder": "artifacts/ingestions/incidents/202606221057",
+      "run_id": "202606221956",
+      "folder": "artifacts/ingestions/incidents/202606221956",
       "bronze_rows": 1245,
       "silver_rows": 1245,
       "bronze_db": "1245 rows -> bronze.incidents",

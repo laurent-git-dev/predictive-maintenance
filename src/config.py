@@ -157,9 +157,16 @@ DB_ENV_DEFAULTS: dict[str, str] = {
 }
 DB_CONNECT_TIMEOUT_SECONDS: int = 3
 
-# Medallion layers → PostgreSQL schemas (1 table per source in each layer).
+# Medallion layers → PostgreSQL schemas (1 table per source in Bronze/Silver).
 BRONZE_SCHEMA: str = "bronze"
 SILVER_SCHEMA: str = "silver"
+# Gold is a SINGLE cross-source table at (machine_id, hour) grain: gold.features.
+GOLD_SCHEMA: str = "gold"
+GOLD_TABLE: str = "features"
+# Lineage / batch traceability (one row per processing step, grouped by batch_id).
+META_SCHEMA: str = "meta"
+GOLD_ARTIFACTS_DIR: Path = PROJECT_ROOT / "artifacts" / "gold"
+GOLD_RUNS_REGISTRY_PATH: Path = GOLD_ARTIFACTS_DIR / "runs_registry.json"
 
 # Display labels for the two sources sharing machines.sql (avoid machine/machines confusion).
 SOURCE_DISPLAY_NAMES: dict[str, str] = {

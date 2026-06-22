@@ -1,0 +1,10 @@
+{
+  "runs": [
+    {
+      "run_id": "202606221957",
+      "folder": "artifacts/gold/202606221957",
+      "gold_rows": 134280,
+      "gold_db": "134280 rows -> gold.features"
+    }
+  ]
+}

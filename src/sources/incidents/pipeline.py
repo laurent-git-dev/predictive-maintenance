@@ -1,4 +1,4 @@
-"""Incidents feature engineering (Silver): derived columns from the Bronze data."""
+"""Incidents feature engineering (Gold): derived columns from the Silver data."""
 
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ def add_confidence_index(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def engineer_silver(df: pd.DataFrame) -> pd.DataFrame:
-    """Silver feature engineering for incidents (operators already pseudonymised).
+def engineer_gold(df: pd.DataFrame) -> pd.DataFrame:
+    """Gold feature engineering for incidents (from the treated Silver data).
 
     Adds:
     - ``datetime`` : combined date + time (fine-grained temporal analysis) ;

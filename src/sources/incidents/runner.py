@@ -1,8 +1,9 @@
-"""Incidents source — bronze/silver builders for the medallion orchestrator.
+"""Incidents source — bronze/silver/gold builders for the medallion orchestrator.
 
 - Bronze : raw typed data + operator pseudonymisation (privacy gate).
-- Silver : feature engineering (datetime, comment_pii_flag, confidence index) +
-  declared processing (encode shift, impute severity).
+- Silver : treatment only (encode shift, impute severity) — no feature engineering.
+- Gold   : handled by the unified builder (src/gold/features.py); incident events are
+  enriched (engineer_gold) and aggregated to the (machine, hour) grain there.
 """
 
 from __future__ import annotations
@@ -16,17 +17,15 @@ from src.processing.anonymization import pseudonymise_operators
 from src.processing.pipeline import ProcessingConfig, apply_processing
 from src.sources.incidents import overview
 from src.sources.incidents.loader import load_incidents
-from src.sources.incidents.pipeline import engineer_silver
 
 logger = logging.getLogger(__name__)
 
 SOURCE_NAME = "incidents"
 TABLE = "incidents"
 BRONZE_NUMERIC = []
-SILVER_NUMERIC = [config.N_SIGNALS_COLUMN, config.CONFIDENCE_COLUMN]
-# Features rendered as an incident-count bar chart (severity is ordinal: kept as a
-# count chart only, no boxplot/distribution). The calendar features are Silver-only
-# (derived from datetime), so they render in the Silver layer by analogy with severity/shift.
+SILVER_NUMERIC = []  # severity is ordinal (count only); no continuous numeric in Silver
+# Features rendered as an incident-count bar chart (severity is ordinal: kept as a count
+# chart only). Calendar/flag features live in the unified Gold table (built per (machine, hour)).
 COUNT_FEATURES = [
     config.OPERATOR_NAME_COLUMN,
     config.OPERATOR_BADGE_COLUMN,
@@ -79,7 +78,9 @@ def load_bronze(input_path=None):
 
 
 def to_silver(bronze_df):
-    """Feature engineering + declared processing; returns ``(silver_df, report)``."""
-    df = engineer_silver(bronze_df)
-    df, report = apply_processing(df, PROCESSING)
-    return df, report
+    """Treatment only (encode shift, impute severity); returns ``(silver_df, report)``."""
+    return apply_processing(bronze_df, PROCESSING)
+
+
+# Feature engineering (``engineer_gold``) is applied at incident-event level by the unified
+# Gold builder (``src/gold/features.py``) before aggregation to the (machine, hour) grain.
