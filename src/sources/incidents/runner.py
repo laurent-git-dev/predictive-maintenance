@@ -37,6 +37,10 @@ COUNT_FEATURES = [
     "hour",
     "weekday",
     "month",
+    # Silver-only 0/1 flags: a count bar (0 vs 1) visualises the engineered features.
+    "is_weekend",
+    "comment_pii_flag",
+    "production_stop_flag",
 ]
 COUNT_LABEL = "incidents"
 # Keyword bars (feature, keywords, title): isolate a sub-population in free text.

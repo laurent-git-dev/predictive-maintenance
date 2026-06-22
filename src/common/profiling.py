@@ -114,6 +114,16 @@ def feature_status_badge(df: pd.DataFrame, feature: str, source: str | None = No
     return f' (<span style="color:{_STATUS_COLOR[label]}">{label}</span>)'
 
 
+# Purple badge flagging a feature created during Bronze -> Silver processing (shared by the
+# processing summary and the Silver per-feature review so both use the exact same marker).
+NEW_FEATURE_BADGE = ' <span style="color:purple">(NEW)</span>'
+
+
+def new_feature_badge(is_new: bool) -> str:
+    """Return the ``(NEW)`` badge when ``is_new`` else an empty string."""
+    return NEW_FEATURE_BADGE if is_new else ""
+
+
 def outlier_summary_markdown(series: pd.Series) -> str:
     """Markdown table of flagged outliers by two methods: IQR (k=1.5) and z-score (k=3).
 

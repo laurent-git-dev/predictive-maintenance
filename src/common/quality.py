@@ -225,6 +225,24 @@ FEATURE_CHECKS: dict[str, list[Check]] = {
     **{signal: [NO_MISSING] for signal in config.SIGNAL_COLUMNS},
     # Every telemetry parameter must have no missing value.
     **{param: [NO_MISSING] for param in config.TELEMETRY_PARAM_COLUMNS},
+    # ── Silver-only features (created in Bronze -> Silver processing) ──────────────
+    # Status proposed by analogy with the closest Bronze features.
+    # Incidents: timestamp-like and calendar features (analogy: date / timestamp).
+    config.DATETIME_COLUMN: [NO_MISSING, NOT_IN_FUTURE],
+    "hour": [NO_MISSING],
+    "weekday": [NO_MISSING],
+    "month": [NO_MISSING],
+    "is_weekend": [NO_MISSING],
+    # Incidents: free-text / production flags (analogy: signal flags, 0/1, never empty).
+    "comment_pii_flag": [NO_MISSING],
+    "production_stop_flag": [NO_MISSING],
+    # Incidents: corroboration features (analogy: a count / ratio that must be positive).
+    config.N_SIGNALS_COLUMN: [NO_MISSING, STRICTLY_POSITIVE],
+    config.CONFIDENCE_COLUMN: [NO_MISSING, STRICTLY_POSITIVE],
+    # Telemetry: capacity breach flag (analogy: signal flags, 0/1, never empty).
+    "over_capacity_flag": [NO_MISSING],
+    # Maintenance: machine age (analogy: a duration that must be positive).
+    "machine_age_years": [NO_MISSING, STRICTLY_POSITIVE],
 }
 
 # Source-scoped checks: (source_name, feature) -> extra checks, added to the global ones.

@@ -36,6 +36,8 @@ COUNT_FEATURES = [
     "hour",
     "weekday",
     "month",
+    # Silver-only 0/1 flag: a count bar (0 vs 1) visualises the engineered feature.
+    "is_weekend",
 ]
 COUNT_LABEL = "maintenances"
 # Cumulative curves per machine (value, time, title).

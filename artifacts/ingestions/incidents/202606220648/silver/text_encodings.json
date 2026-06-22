@@ -1,0 +1,7 @@
+{
+  "shift": {
+    "matin": 0,
+    "apres-midi": 1,
+    "nuit": 2
+  }
+}

@@ -22,6 +22,8 @@ TABLE = "telemetry"
 MEASURES = [c for c in config.TELEMETRY_PARAM_COLUMNS if c != config.TELEMETRY_PIECES_COLUMN]
 BRONZE_NUMERIC = list(config.TELEMETRY_PARAM_COLUMNS)
 SILVER_NUMERIC = list(config.TELEMETRY_PARAM_COLUMNS)
+# Silver-only 0/1 flag: a count bar (0 vs 1) visualises how many readings exceed capacity.
+COUNT_FEATURES = ["over_capacity_flag"]
 # Per-machine time series (value, time, title, freq): one mean line per machine.
 TIMESERIES = [
     (
