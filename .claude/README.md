@@ -20,3 +20,13 @@ Each script reads the event JSON on stdin; launched via `uv run python` so `ruff
 
 Tune or disable any hook by editing `settings.json`. The guard is best-effort (a guard, not a
 sandbox); use `settings.local.json` for personal permission additions.
+
+## Skills (`.claude/skills/<name>/SKILL.md`)
+Project workflows, invocable as `/<name>`:
+
+| Skill | What it does |
+|---|---|
+| `add-source` | Scaffold a new medallion source end-to-end (the ARCHITECTURE checklist, in one pass). |
+| `run-pipeline` | Run the full pipeline (DB/proxy aware) and summarise rows per layer + lineage. |
+| `commit-run` | Version a run: DVC-add CSVs → Conventional commit → `dvc push` → `git push`. |
+| `quality-gate` | `ruff` + `black` + `pytest` (incl. golden) with a concise PASS/FAIL verdict. |
