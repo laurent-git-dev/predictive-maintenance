@@ -15,8 +15,8 @@
   locale) → `http.sslBackend=schannel` + `http.schannelCheckRevoke=false`.
 - 🗄️ **Base** : créer/mettre à jour le schéma avec `uv run alembic upgrade head` (schémas
   `bronze` + `meta`). Silver/Gold partent des tables en base → DB requise (sinon `--no-db`).
-- 📓 **Notebook** : kernel `.venv` (Python 3.14). Helpers dans `src/notebook/render.py`
-  (la cellule Setup fait `from src.notebook.render import *`) — **ne pas** relire tout le notebook.
+- 📓 **Notebook** : kernel `.venv` (Python 3.14). Helpers dans `src/usecase/notebook/render.py`
+  (la cellule Setup fait `from src.usecase.notebook.render import *`) — **ne pas** relire tout le notebook.
 
 ---
 
@@ -92,18 +92,18 @@ uv run ruff check . ; uv run black .
   cible = panne (severity ≥ 4) à +6/12/24/48 h ; features mémoire/tendance/anomalie/contexte +
   labels (antifuite).
 - **Traçabilité** : chaque exécution = un `batch_id` ; chaque étape → 1 ligne dans
-  `meta.processing_runs` (`src/lineage/`).
-- **Mutualisation** : `src/common/` (`stage.run_layer`, `profiling`, `quality`) ; runners de
-  source **minces** ; orchestrateur `src/orchestrator.py`.
+  `meta.processing_runs` (`src/framework/lineage/`).
+- **Mutualisation** : `src/framework/common/` (`stage.run_layer`, `profiling`, `quality`) ; runners de
+  source **minces** ; orchestrateur `src/usecase/orchestrator.py`.
 - **Notebook** : 3 chapitres (BRONZE/SILVER/GOLD), gabarit par source **PREVIEW / PROCESSING /
-  OVERVIEW** + appendices ; helpers dans `src/notebook/render.py`.
+  OVERVIEW** + appendices ; helpers dans `src/usecase/notebook/render.py`.
 
 ## Ajouter une source de données
 
 > ⚙️ **Instruction permanente** : réaliser **directement l'ensemble** de la checklist
-> (sans étape par étape), en réutilisant `src/common/` et le modèle des sources existantes.
+> (sans étape par étape), en réutilisant `src/framework/common/` et le modèle des sources existantes.
 
 Checklist détaillée : voir **[docs/ARCHITECTURE.md → « Add a new source »](docs/ARCHITECTURE.md)**.
-En bref : `config.py` (schéma/chemins) → `src/sources/<nom>/` (`loader.py`, `runner.py` mince :
-`load_bronze`/`to_silver` + hooks) → enregistrer dans `src/sources/registry.py` → critères
-qualité (`src/common/quality.py`) → `scripts/run_<nom>.py` → cellules notebook → documenter.
+En bref : `config.py` (schéma/chemins) → `src/usecase/sources/<nom>/` (`loader.py`, `runner.py` mince :
+`load_bronze`/`to_silver` + hooks) → enregistrer dans `src/usecase/sources/registry.py` → critères
+qualité (`src/quality.py`) → `scripts/run_<nom>.py` → cellules notebook → documenter.

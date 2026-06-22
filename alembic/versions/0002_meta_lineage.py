@@ -8,7 +8,7 @@ Create Date: 2026-06-22
 from __future__ import annotations
 
 from alembic import op
-from src.lineage.models import LineageBase
+from src.framework.lineage.models import LineageBase
 
 revision = "0002_meta"
 down_revision = "0001_bronze"

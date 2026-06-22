@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 
 from src import config
-from src.gold.features import build_gold_features
-from src.lineage.tracker import _hash_df
-from src.sources.registry import SOURCE_SPECS
+from src.framework.lineage.tracker import _hash_df
+from src.usecase.gold.features import build_gold_features
+from src.usecase.sources.registry import SOURCE_SPECS
 
 _RAW = [config.DEFAULT_INPUT_CSV, config.DEFAULT_TELEMETRY_CSV, config.DEFAULT_MACHINES_SQL]
 pytestmark = pytest.mark.skipif(

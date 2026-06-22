@@ -26,7 +26,7 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
-from src.analyses.runner import execute_run  # noqa: E402
+from src.usecase.analyses.runner import execute_run  # noqa: E402
 
 # Readable accented logs in the Windows console (cp1252 by default).
 for _stream in (sys.stdout, sys.stderr):

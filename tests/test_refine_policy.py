@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.ingestion.validate import PARSE_OK, PARSE_REASON
-from src.silver.refine import split_rejected
+from src.framework.ingestion.validate import PARSE_OK, PARSE_REASON
+from src.usecase.silver.refine import split_rejected
 
 
 def _frame():

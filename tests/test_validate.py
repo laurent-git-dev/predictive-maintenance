@@ -5,8 +5,8 @@ from __future__ import annotations
 import pandas as pd
 
 from src import config
-from src.ingestion.schemas import IncidentRow
-from src.ingestion.validate import PARSE_OK, PARSE_REASON, validate_and_flag
+from src.framework.ingestion.validate import PARSE_OK, PARSE_REASON, validate_and_flag
+from src.usecase.ingestion.schemas import IncidentRow
 
 
 def _base_row(incident_id="I1", **overrides):

@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.common.env import load_dotenv  # noqa: E402
-from src.database.engine import database_url  # noqa: E402
-from src.database.models_bronze import SCHEMA, BronzeBase  # noqa: E402
+from src.framework.common.env import load_dotenv  # noqa: E402
+from src.framework.db.engine import database_url  # noqa: E402
+from src.usecase.db.models_bronze import SCHEMA, BronzeBase  # noqa: E402
 
 cfg = context.config
 if cfg.config_file_name is not None:

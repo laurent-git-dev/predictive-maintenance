@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from src import config
-from src.gold.features import WE, WS, build_gold_features
+from src.usecase.gold.features import WE, WS, build_gold_features
 
 BASE = pd.Timestamp("2025-01-01 00:00:00")
 N_HOURS = 30

@@ -6,23 +6,35 @@ the durable conventions and commands; this file is the map (read it on demand). 
 
 ## Layout
 
+**Framework / use-case split** (B2). Dependency rule, strictly enforced: **kernel ← framework
+← use-case**. The *kernel* is passive project configuration; the *framework* is the generic
+medallion engine (never imports `src.usecase.*`); the *use-case* is this predictive-maintenance
+application. Only the kernel may be imported by every layer.
+
 ```
 src/
-├── config.py          chemins, schémas DB (BRONZE/SILVER/GOLD/META_SCHEMA), constantes
-├── orchestrator.py    run_pipeline : Bronze+Silver par source → run_gold (1 table) → cross-source
-├── common/            mutualisé : stage.run_layer, profiling (per-feature + plots + status),
-│                      quality (OK/NOK), processing_summary, metrics, reporting, registry, overview, env
-├── processing/        outils : anonymization, dedup, interpolation, transformation (encode),
-│                      imputation, outliers, normalization, pipeline (apply_processing)
-├── ingestion/         Bronze : schemas.py (Pydantic), validate.py (parse_ok/parse_reason),
-│                      load.py (validate+flag+TRUNCATE/append), stats.py
-├── silver/            refine.py : lit bronze.* (DB), reject policy, traitements → silver.* + stats
-├── gold/              features.py (build_gold_features / build_gold_from_db) → gold.features ; stats.py
-├── lineage/           models.py (meta.processing_runs), tracker.py (Batch+step), quality.py (soft)
-├── database/          engine (ensure_schema), loader (to_sql par schéma), models_bronze.py (ORM)
-├── sources/           1 package/source (runner mince) ; registry.py = SOURCE_SPECS
-├── analyses/          analyses inter-sources (joins, plots, runner)
-└── notebook/          render.py : helpers du notebook (importables) + état partagé
+├── config.py              KERNEL — chemins, schémas DB (BRONZE/SILVER/GOLD/META), constantes
+├── quality.py             KERNEL — critères qualité par feature (Check, FEATURE_CHECKS, status)
+│
+├── framework/             MOTEUR GÉNÉRIQUE (config/quality uniquement ; jamais src.usecase.*)
+│   ├── common/            stage.run_layer, profiling (per-feature + plots + status),
+│   │                      processing_summary, metrics, reporting, registry, overview, env,
+│   │                      coherence, synthesis
+│   ├── processing/        outils : anonymization, dedup, interpolation, transformation (encode),
+│   │                      imputation, outliers, normalization, pipeline (apply_processing)
+│   ├── ingestion/         validate.py (parse_ok/parse_reason, Pydantic-agnostique), stats.py
+│   ├── lineage/           models.py (meta.processing_runs), tracker.py (Batch+step), quality.py
+│   └── db/                engine (ensure_schema), loader (to_sql par schéma)
+│
+└── usecase/               APPLICATION (libre d'importer framework + kernel)
+    ├── orchestrator.py    run_pipeline : Bronze+Silver par source → run_gold (1 table) → cross-source
+    ├── sources/           1 package/source (runner mince) ; registry.py = SOURCE_SPECS
+    ├── ingestion/         schemas.py (Pydantic), load.py (validate+flag+TRUNCATE/append)
+    ├── db/                models_bronze.py (ORM des 4 tables Bronze)
+    ├── silver/            refine.py : lit bronze.* (DB), reject policy, traitements → silver.* + stats
+    ├── gold/              features.py (build_gold_features / build_gold_from_db) → gold.features ; stats.py
+    ├── analyses/          analyses inter-sources (joins, plots, runner)
+    └── notebook/          render.py : helpers du notebook (importables) + état partagé
 scripts/   run_pipeline.py (tout) + run_{incidents,telemetry,machines,cross_source}.py
 notebooks/ pipeline.ipynb (3 chapitres BRONZE/SILVER/GOLD ; non DVC)
 alembic/   migrations (0001 bronze, 0002 meta)
@@ -38,7 +50,7 @@ reading the previous one **from the database**.
   **without modifying values**; all rows are loaded into `bronze.*` (SQLAlchemy, schema managed
   by Alembic). 4 sources: `incidents`, `telemetry`, `machine` (dimension, Bronze-only),
   `machines` (maintenance facts).
-- **Silver** — `src/silver/refine.py` reads `bronze.*`; **reject policy** (rows whose only
+- **Silver** — `src/usecase/silver/refine.py` reads `bronze.*`; **reject policy** (rows whose only
   anomalies are `duplicate`/`missing` are **kept & corrected** by the treatments; `type` /
   `domain` / `format` / `range` / `invalid` are **rejected**); then `apply_processing`
   (dedup, dimension merge, encode, impute, time interpolation, normalize) → `silver.*`
@@ -52,9 +64,9 @@ reading the previous one **from the database**.
   to & including the current hour; labels look strictly after `t` (NaN if censored at the
   series end; row kept). Feature groups: **memory** (rolling mean/max/std), **trend** (OLS
   slope), **anomaly** (z-scores), **context** (incidents / signals / maintenance) and
-  **labels** (4 horizons, multi-target). No leakage. Stats: `src/gold/stats.py`.
+  **labels** (4 horizons, multi-target). No leakage. Stats: `src/usecase/gold/stats.py`.
 
-Everything generic is mutualised in `src/common/` (`stage.run_layer`, `profiling`, `quality`);
+Everything generic is mutualised in `src/framework/common/` (`stage.run_layer`, `profiling`, `quality`);
 source runners are **thin** (`load_bronze`, `to_silver`, `BRONZE_NUMERIC`/`SILVER_NUMERIC` +
 optional hooks). `to_sql` is `replace` per schema → idempotent.
 
@@ -74,11 +86,11 @@ Créer/mettre à jour le schéma : `uv run alembic upgrade head` (l'ingestion fa
 
 Chaque `run_pipeline` ouvre un **batch** (`batch_id`) ; chaque étape (ingest Bronze, refine
 Silver, build Gold) écrit **une ligne** dans **`meta.processing_runs`** via
-`src/lineage/tracker.py` (`Batch` + `batch.step(...)`) : `step`, `layer`, `source`,
+`src/framework/lineage/tracker.py` (`Batch` + `batch.step(...)`) : `step`, `layer`, `source`,
 `input_ref`/`output_ref`, `started_at`/`ended_at`/`duration_s`, `status`,
 `rows_read`/`rows_ingested`/`rows_rejected`, `quality_ok`, `code_version` (git sha),
 `output_hash`, `details` (JSON). Lignage complet : `SELECT … WHERE batch_id = X ORDER BY
-started_at`. Contrôles qualité **soft** (`src/lineage/quality.py` : unicité du grain Gold,
+started_at`. Contrôles qualité **soft** (`src/framework/lineage/quality.py` : unicité du grain Gold,
 continuité du nombre de lignes vs batch précédent) → enregistrés + warning, sans bloquer.
 
 ## Notebook (3 chapters)
@@ -88,14 +100,14 @@ continuité du nombre de lignes vs batch précédent) → enregistrés + warning
 `#### X.Y.1 PREVIEW` (per-feature understanding) → `#### X.Y.2 PROCESSING` (per-feature
 transformation, **(NEW)** badge on created columns) → `#### X.Y.3 OVERVIEW` (Permanent +
 Inline analysis). Cross-cutting content (DB upload, cross-source, synthesis, global overview,
-batch lineage) sits in per-chapter **appendices**. Helpers live in `src/notebook/render.py`
-(the Setup cell does `from src.notebook.render import *`). Re-select the `.venv` (3.14) kernel.
+batch lineage) sits in per-chapter **appendices**. Helpers live in `src/usecase/notebook/render.py`
+(the Setup cell does `from src.usecase.notebook.render import *`). Re-select the `.venv` (3.14) kernel.
 
 ## Per-feature understanding & quality (OK/NOK)
 
-Each Bronze/Silver layer produces the **same per-feature model** (`src/common/profiling.py`):
+Each Bronze/Silver layer produces the **same per-feature model** (`src/framework/common/profiling.py`):
 type-aware synthesis + an **OK/NOK status** badge + plots. Status criteria are declared in
-`src/common/quality.py`:
+`src/quality.py`:
 - `FEATURE_CHECKS` — by feature name (all sources/layers);
 - `SOURCE_FEATURE_CHECKS` — scoped to `(source, feature)` (e.g. `machine_id` is a primary key
   only in the `machine` dimension).
@@ -109,7 +121,7 @@ Per-layer artefacts under `artifacts/ingestions/<source>/<run>/{bronze,silver}/`
 `5.<i>_heat_*`, `6.<i>_ts_*`, `run_report.md`, `dataset_report.md`, `text_encodings.json`.
 Numeric features per source: incidents Bronze/Silver = ∅ (severity = count chart only);
 telemetry = the 5 params; maintenance = `duration_hours`; machine dim = capacities. Gold has
-its own `FEATURES_NUMERIC` / `FEATURES_COUNT` in `src/gold/features.py`.
+its own `FEATURES_NUMERIC` / `FEATURES_COUNT` in `src/usecase/gold/features.py`.
 
 ## Source data
 
@@ -127,44 +139,44 @@ the 4 measures; **no outlier winsorisation** (it piled an artificial spike at th
 `pieces_produced` kept raw.
 
 **`data/raw/machines.sql`** — PostgreSQL dump loaded into local **SQLite** via SQLAlchemy ORM
-(`src/sources/machines/models.py`), read with `pandas.read_sql`; `machine_code` renamed
+(`src/usecase/sources/machines/models.py`), read with `pandas.read_sql`; `machine_code` renamed
 `machine_id`. Two medallion sources: `machines` (maintenance facts) and `machine`
 (referential dimension, **Bronze-only**, coherence checks: PK no-duplicate, criticality
 domain, positive capacities, commissioning date not in the future).
 
 ## Cross-source analyses
 
-`src/analyses/` combines sources (joins on `machine_id` / `incident_id`), reusing source
+`src/usecase/analyses/` combines sources (joins on `machine_id` / `incident_id`), reusing source
 loaders; artefacts under `artifacts/analyses/cross_source/<run>/` (`machine_profile.csv` +
 plots + reports). Run: `uv run python scripts/run_cross_source.py`.
 
 ## Add a new source (checklist)
 
-Permanent instruction: do the whole checklist at once, reusing `src/common/` and mirroring the
+Permanent instruction: do the whole checklist at once, reusing `src/framework/common/` and mirroring the
 existing sources (the runner stays **thin**).
 
 1. **Schema & paths** in `src/config.py`.
-2. **`src/sources/<name>/`**: `loader.py` (`load_<name>()`, raw typed, no treatment); thin
+2. **`src/usecase/sources/<name>/`**: `loader.py` (`load_<name>()`, raw typed, no treatment); thin
    `runner.py` exposing `SOURCE_NAME`, `TABLE`, `BRONZE_NUMERIC`/`SILVER_NUMERIC`,
    `load_bronze()` (+ `pseudonymise_operators` if operator PII), `to_silver(bronze_df) ->
    (df, report)` via `apply_processing(...)`. Gold has **no per-source `to_gold`**: the single
-   `gold.features` is built in `src/gold/features.py` — extend the builder if the new source
+   `gold.features` is built in `src/usecase/gold/features.py` — extend the builder if the new source
    should contribute. Optional hooks (read via `getattr`): `COUNT_FEATURES`/`COUNT_LABEL`,
    `KEYWORD_BARS`, `HEATMAPS`, `TIMESERIES`, `OVERVIEW`, `FEATURE_PLOTS`, `MACHINE_COL`,
    `CUMULATIVE`, `BARS_BY_MACHINE`, `PROCESSING` (`ProcessingConfig`), `BRONZE_ONLY`.
 3. **No treatment in Bronze** (except operator pseudonymisation). Treatment in Silver
    (`to_silver`); derived features in the unified Gold builder.
-4. **Register** in `src/sources/registry.py` (`SOURCE_SPECS` via `_spec(<name>_runner)`) →
+4. **Register** in `src/usecase/sources/registry.py` (`SOURCE_SPECS` via `_spec(<name>_runner)`) →
    the orchestrator handles Bronze + Silver + DB load automatically.
-5. **Quality** (optional): declare checks in `src/common/quality.py`.
+5. **Quality** (optional): declare checks in `src/quality.py`.
 6. **`scripts/run_<name>.py`**: minimal CLI (`run_source_by_name("<name>")`, Agg backend,
    `--no-db`).
 7. **Notebook**: add the source under chapters 1/2 (`show_per_feature_spec` /
-   `show_silver_*` from `src.notebook.render`); Gold (ch. 3) is the single table.
+   `show_silver_*` from `src.usecase.notebook.render`); Gold (ch. 3) is the single table.
 8. **Document** in `CLAUDE.md` / `README.md` / this file.
 
 > The source↔table↔key mapping is consolidated in **one place**: each source declares its
 > facts in its runner (`MODEL`, `DUP_KEYS`, `RAW_REF`, `GOLD_ROLE`, `TABLE`), aggregated into
-> `SourceSpec` (`src/sources/registry.py`). Ingestion (`load.py`), Silver (`refine.py`), Gold
+> `SourceSpec` (`src/usecase/sources/registry.py`). Ingestion (`load.py`), Silver (`refine.py`), Gold
 > (`features.read_silver`) and the orchestrator all read from `SPECS_BY_NAME` / `gold_sources()`
 > — no local re-declaration. Adding a Gold-contributing source needs no change in `gold/`.

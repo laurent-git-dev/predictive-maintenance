@@ -5,12 +5,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.processing.dedup import deduplicate
-from src.processing.imputation import impute
-from src.processing.interpolation import interpolate_by_group
-from src.processing.normalization import normalize
-from src.processing.outliers import treat_outliers
-from src.processing.transformation import encode_categorical
+from src.framework.processing.dedup import deduplicate
+from src.framework.processing.imputation import impute
+from src.framework.processing.interpolation import interpolate_by_group
+from src.framework.processing.normalization import normalize
+from src.framework.processing.outliers import treat_outliers
+from src.framework.processing.transformation import encode_categorical
 
 
 def test_deduplicate_mean_reconciles_duplicates():

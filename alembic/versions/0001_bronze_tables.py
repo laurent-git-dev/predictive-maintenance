@@ -8,7 +8,7 @@ Create Date: 2026-06-22
 from __future__ import annotations
 
 from alembic import op
-from src.database.models_bronze import BronzeBase
+from src.usecase.db.models_bronze import BronzeBase
 
 revision = "0001_bronze"
 down_revision = None

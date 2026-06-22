@@ -24,7 +24,7 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
-from src.orchestrator import run_source_by_name  # noqa: E402
+from src.usecase.orchestrator import run_source_by_name  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):

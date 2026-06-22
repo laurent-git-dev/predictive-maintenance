@@ -27,7 +27,7 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
-from src.orchestrator import run_pipeline  # noqa: E402
+from src.usecase.orchestrator import run_pipeline  # noqa: E402
 
 # Readable accented logs in the Windows console (cp1252 by default).
 for _stream in (sys.stdout, sys.stderr):
