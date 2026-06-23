@@ -144,7 +144,7 @@ def test_time_to_failure_label():
     assert gold["label_ttf_censored"].loc[BASE + pd.Timedelta(hours=9)] == 1
 
 
-def test_failure_refractory_collapses_onsets(monkeypatch):
+def test_failure_refractory_collapses_onsets():
     silver = _synthetic_silver()
     extra = silver["incidents"].iloc[[0]].copy()
     extra[config.TIME_COLUMN] = "11:00:00"  # a second failure 2h after the first
@@ -156,6 +156,5 @@ def test_failure_refractory_collapses_onsets(monkeypatch):
 
     # Refractory 5h: the failure at 11 is within 5h of the one at 9, so it is NOT a new onset
     # -> no onset strictly after hour 10 -> censored.
-    monkeypatch.setattr("src.usecase.gold.features.FAILURE_REFRACTORY_H", 5)
-    refr = build_gold_features(silver).set_index(WS)
+    refr = build_gold_features(silver, {"failure_refractory_h": 5}).set_index(WS)
     assert pd.isna(refr["label_ttf_hours"].loc[BASE + pd.Timedelta(hours=10)])

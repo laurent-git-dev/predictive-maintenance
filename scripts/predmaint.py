@@ -13,6 +13,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -27,6 +28,7 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
+from src import config  # noqa: E402
 from src.usecase.orchestrator import run_pipeline, run_source_by_name  # noqa: E402
 from src.usecase.sources.registry import SOURCE_SPECS  # noqa: E402
 
@@ -57,8 +59,36 @@ def _build_parser() -> argparse.ArgumentParser:
     p_src.add_argument("name", choices=_SOURCE_NAMES, help="Source to run.")
     p_src.add_argument("--no-db", action="store_true", help="Skip the PostgreSQL load stage.")
 
+    p_gold = sub.add_parser("gold", help="Build a versioned Gold dataset from a params profile.")
+    p_gold.add_argument("--params", default=None, help="YAML profile with a gold: section.")
+    p_gold.add_argument("--no-db", action="store_true", help="Build from in-memory Silver.")
+
     sub.add_parser("lineage", help="Print the latest batch lineage from meta.processing_runs.")
     return parser
+
+
+def _cmd_gold(params_path: str | None, no_db: bool) -> int:
+    import yaml
+
+    from src.framework.db.engine import get_engine, is_available
+    from src.settings import require_salt
+    from src.usecase.gold.experiment import build_gold_version, load_silver
+
+    require_salt()
+    params = None
+    if params_path:
+        params = (yaml.safe_load(Path(params_path).read_text(encoding="utf-8")) or {}).get("gold")
+    engine = get_engine() if (not no_db and is_available()) else None
+    silver = load_silver(engine)
+    out_dir = config.PROJECT_ROOT / "artifacts" / "gold_experiments"
+    _, manifest = build_gold_version(silver, params, output_dir=out_dir)
+    summary = {
+        k: manifest[k]
+        for k in ("dataset_version", "rows", "cols", "content_hash", "split", "label_positive_rate")
+    }
+    print(json.dumps(summary, indent=2))
+    logger.info("Gold version %s written under %s", manifest["dataset_version"], out_dir)
+    return 0
 
 
 def _cmd_lineage() -> int:
@@ -84,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
             run_pipeline(load_db=not args.no_db)
         elif args.command == "source":
             run_source_by_name(args.name, load_db=not args.no_db)
+        elif args.command == "gold":
+            return _cmd_gold(args.params, args.no_db)
         elif args.command == "lineage":
             return _cmd_lineage()
     except (FileNotFoundError, ValueError) as exc:

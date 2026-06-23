@@ -52,6 +52,18 @@ def load_gold_params() -> dict:
     return params
 
 
+def resolve_gold_params(params: dict | None = None) -> dict:
+    """Full gold spec: defaults ← params.yaml, or ← an explicit override dict (experiments)."""
+    resolved = dict(_GOLD_DEFAULTS)
+    resolved.update(load_gold_params() if params is None else params)
+    split_override = resolved.get("split")
+    resolved["split"] = {
+        **_DEFAULT_SPLIT,
+        **(split_override if isinstance(split_override, dict) else {}),
+    }
+    return resolved
+
+
 _P = load_gold_params()
 FAILURE_SEVERITY_MIN = int(_P["failure_severity_min"])  # incident severity >= this = failure
 MEASURES = list(config.TELEMETRY_PARAM_COLUMNS)  # 5 telemetry measures (incl. pieces_produced)
@@ -153,7 +165,7 @@ def _time_to_failure(df: pd.DataFrame, hour_flag: str, mc: str) -> pd.Series:
     return out
 
 
-def _per_hour_tables(silver: dict, mc: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _per_hour_tables(silver: dict, mc: str, fail_sev: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Aggregate incident & maintenance events to per-(machine, hour) helper columns."""
     inc = silver["incidents"].copy()
     inc[WS] = _floor_hour(
@@ -161,7 +173,7 @@ def _per_hour_tables(silver: dict, mc: str) -> tuple[pd.DataFrame, pd.DataFrame]
     )
     inc = inc.dropna(subset=[WS])
     sev = pd.to_numeric(inc[config.SEVERITY_COLUMN], errors="coerce")
-    inc = inc.assign(_sev=sev, _fail=(sev >= FAILURE_SEVERITY_MIN).astype(int))
+    inc = inc.assign(_sev=sev, _fail=(sev >= fail_sev).astype(int))
     g = inc.groupby([mc, WS], sort=False)
     inc_hour = g.agg(_inc=("_sev", "size"), _sevmax=("_sev", "max"), _fail=("_fail", "max"))
     inc_hour = inc_hour.join(g[SIGNALS].sum()).reset_index()
@@ -237,8 +249,25 @@ def _assign_split(df: pd.DataFrame, mc: str, split: dict) -> pd.Series:
     )
 
 
-def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """Build the unified Gold feature table from the Silver frames (one row per machine-hour)."""
+def build_gold_features(
+    silver: dict[str, pd.DataFrame], params: dict | None = None
+) -> pd.DataFrame:
+    """Build the unified Gold feature table from the Silver frames (one row per machine-hour).
+
+    ``params`` overrides the Gold spec (defaults to ``params.yaml``) — used to produce
+    alternative dataset versions for experiments without touching the reference.
+    """
+    p = resolve_gold_params(params)
+    # Spec values for this build (shadow the module defaults so the body stays unchanged).
+    FAILURE_SEVERITY_MIN = int(p["failure_severity_min"])  # noqa: N806
+    MEM_H = list(p["memory_horizons_h"])  # noqa: N806
+    TREND_H = list(p["trend_horizons_h"])  # noqa: N806
+    EVENT_H = list(p["event_horizons"].items())  # noqa: N806
+    MNT_D = list(p["maintenance_windows_d"].items())  # noqa: N806
+    LABEL_H = list(p["label_horizons"].items())  # noqa: N806
+    BASELINE_HOURS = int(p["baseline_hours"])  # noqa: N806
+    FAILURE_REFRACTORY_H = int(p["failure_refractory_h"])  # noqa: N806
+    SPLIT = p["split"]  # noqa: N806
     mc = config.MACHINE_COLUMN
 
     # Spine: contiguous hourly telemetry per machine (window_start = the hour).
@@ -251,7 +280,7 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
         .reset_index(drop=True)
     )
 
-    inc_hour, mnt_hour = _per_hour_tables(silver, mc)
+    inc_hour, mnt_hour = _per_hour_tables(silver, mc, FAILURE_SEVERITY_MIN)
     df = sp.merge(inc_hour, on=[mc, WS], how="left").merge(mnt_hour, on=[mc, WS], how="left")
     hour_cols = ["_inc", "_sevmax", "_fail", *SIGNALS, "_corr", "_prov"]
     df[hour_cols] = df[hour_cols].fillna(0)
