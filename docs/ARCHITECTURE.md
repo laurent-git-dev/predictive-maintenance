@@ -65,6 +65,9 @@ reading the previous one **from the database**.
   series end; row kept). Feature groups: **memory** (rolling mean/max/std), **trend** (OLS
   slope), **anomaly** (z-scores), **context** (incidents / signals / maintenance) and
   **labels** (4 horizons, multi-target). No leakage. Stats: `src/usecase/gold/stats.py`.
+  The spec (failure threshold, label/memory/trend/event horizons, maintenance windows) is
+  **parametrable via `params.yaml`** (`gold.*`, read by `load_gold_params`) — re-target the
+  use case without touching code; defaults reproduce the reference table.
 
 Everything generic is mutualised in `src/framework/common/` (`stage.run_layer`, `profiling`, `quality`);
 source runners are **thin** (`load_bronze`, `to_silver`, `BRONZE_NUMERIC`/`SILVER_NUMERIC` +

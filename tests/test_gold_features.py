@@ -6,7 +6,24 @@ import numpy as np
 import pandas as pd
 
 from src import config
-from src.usecase.gold.features import WE, WS, build_gold_features
+from src.usecase.gold.features import (
+    EVENT_H,
+    FAILURE_SEVERITY_MIN,
+    LABEL_H,
+    WE,
+    WS,
+    build_gold_features,
+    load_gold_params,
+)
+
+
+def test_gold_params_load_with_reference_defaults():
+    p = load_gold_params()
+    assert FAILURE_SEVERITY_MIN == 4
+    assert [h for _, h in LABEL_H] == [6, 12, 24, 48]
+    assert [lab for lab, _ in EVENT_H] == ["6h", "12h", "24h", "48h", "7d"]
+    assert p["memory_horizons_h"] == [2, 3, 4, 6, 12, 24, 48]
+
 
 BASE = pd.Timestamp("2025-01-01 00:00:00")
 N_HOURS = 30

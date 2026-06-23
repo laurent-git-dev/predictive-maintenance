@@ -1,0 +1,11 @@
+# Gold feature-spec parameters — externalised so the use case can be re-targeted
+# without touching code. Read by src/usecase/gold/features.py (load_gold_params).
+# The defaults below reproduce the reference Gold table EXACTLY — keep them unless you
+# intend to change the spec (the golden tests pin the reference output).
+gold:
+  failure_severity_min: 4 # an incident of severity >= this is a "failure" (label + context)
+  memory_horizons_h: [2, 3, 4, 6, 12, 24, 48] # rolling mean/max/std windows (hours)
+  trend_horizons_h: [2, 3, 4, 5, 6] # rolling OLS-slope windows (hours)
+  label_horizons: { "6h": 6, "12h": 12, "24h": 24, "48h": 48 } # failure-in-next-X targets
+  event_horizons: { "6h": 6, "12h": 12, "24h": 24, "48h": 48, "7d": 168 } # incident/signal counts
+  maintenance_windows_d: { "5d": 5, "10d": 10, "20d": 20, "30d": 30, "60d": 60 } # maint. counts

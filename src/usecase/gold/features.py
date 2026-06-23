@@ -16,19 +16,43 @@ import logging
 
 import numpy as np
 import pandas as pd
+import yaml
 
 from src import config
 from src.framework.timeutils import to_naive_hour
 
 logger = logging.getLogger(__name__)
 
+# Gold spec defaults (reproduce the reference table). Overridable via params.yaml → gold.*
+_GOLD_DEFAULTS = {
+    "failure_severity_min": 4,
+    "memory_horizons_h": [2, 3, 4, 6, 12, 24, 48],
+    "trend_horizons_h": [2, 3, 4, 5, 6],
+    "event_horizons": {"6h": 6, "12h": 12, "24h": 24, "48h": 48, "7d": 168},
+    "maintenance_windows_d": {"5d": 5, "10d": 10, "20d": 20, "30d": 30, "60d": 60},
+    "label_horizons": {"6h": 6, "12h": 12, "24h": 24, "48h": 48},
+}
+
+
+def load_gold_params() -> dict:
+    """Read the Gold spec from ``params.yaml`` (``gold`` section), filling missing keys."""
+    params = dict(_GOLD_DEFAULTS)
+    path = config.PROJECT_ROOT / "params.yaml"
+    if path.exists():
+        loaded = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("gold") or {}
+        params.update(loaded)
+    return params
+
+
+_P = load_gold_params()
+FAILURE_SEVERITY_MIN = int(_P["failure_severity_min"])  # incident severity >= this = failure
 MEASURES = list(config.TELEMETRY_PARAM_COLUMNS)  # 5 telemetry measures (incl. pieces_produced)
 SIGNALS = list(config.SIGNAL_COLUMNS)  # 9 type_* signals
-MEM_H = [2, 3, 4, 6, 12, 24, 48]  # memory horizons (hours)
-TREND_H = [2, 3, 4, 5, 6]  # trend horizons (hours)
-EVENT_H = [("6h", 6), ("12h", 12), ("24h", 24), ("48h", 48), ("7d", 168)]  # incident/signal (hours)
-MNT_D = [("5d", 5), ("10d", 10), ("20d", 20), ("30d", 30), ("60d", 60)]  # maintenance (days)
-LABEL_H = [("6h", 6), ("12h", 12), ("24h", 24), ("48h", 48)]  # label horizons (hours)
+MEM_H = list(_P["memory_horizons_h"])  # memory horizons (hours)
+TREND_H = list(_P["trend_horizons_h"])  # trend horizons (hours)
+EVENT_H = list(_P["event_horizons"].items())  # incident/signal horizons (label, hours)
+MNT_D = list(_P["maintenance_windows_d"].items())  # maintenance windows (label, days)
+LABEL_H = list(_P["label_horizons"].items())  # label horizons (label, hours)
 WS, WE = "window_start", "window_end"
 
 # Representative subset for the layer profiling (the full table is ~216 columns).
@@ -100,7 +124,7 @@ def _per_hour_tables(silver: dict, mc: str) -> tuple[pd.DataFrame, pd.DataFrame]
     )
     inc = inc.dropna(subset=[WS])
     sev = pd.to_numeric(inc[config.SEVERITY_COLUMN], errors="coerce")
-    inc = inc.assign(_sev=sev, _fail=(sev >= 4).astype(int))
+    inc = inc.assign(_sev=sev, _fail=(sev >= FAILURE_SEVERITY_MIN).astype(int))
     g = inc.groupby([mc, WS], sort=False)
     inc_hour = g.agg(_inc=("_sev", "size"), _sevmax=("_sev", "max"), _fail=("_fail", "max"))
     inc_hour = inc_hour.join(g[SIGNALS].sum()).reset_index()
