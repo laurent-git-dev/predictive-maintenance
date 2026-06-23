@@ -256,16 +256,26 @@ If PostgreSQL is unavailable, DB load is skipped with a warning; Silver/Gold sti
 
 ### 5.1 Inspect the database with pgAdmin
 
-Connection parameters (from `docker-compose.yml` / `.env`; the container port is published to the
-host):
+**Where the credentials live.** The DB login/password come from **`.env`** (project root,
+gitignored) if it defines `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`; **otherwise the
+defaults apply** — both `docker-compose.yml` (`${POSTGRES_USER:-predictive}` …) and
+`src/settings.py` fall back to `predictive` / `predictive` / `predictive_maintenance`.
+`.env.example` documents the keys. To see your effective values:
+`grep ^POSTGRES_ .env` (no output ⇒ defaults are in effect, i.e. `predictive:predictive`).
 
-| Field | Value |
+> ⚠️ The PostgreSQL password is **fixed at the first initialisation of the `pgdata` volume**.
+> Adding/changing `POSTGRES_PASSWORD` in `.env` afterwards has **no effect** until you recreate the
+> volume: `docker compose down -v && docker compose up -d` (this **wipes** the DB data).
+
+Connection parameters (the container port is published to the host):
+
+| Field | Value (default) |
 |---|---|
 | Host | `localhost` |
 | Port | `5432` |
 | Maintenance DB | `predictive_maintenance` |
 | Username | `predictive` |
-| Password | `predictive` (your `.env` `POSTGRES_PASSWORD`) |
+| Password | `predictive` (or your `.env` `POSTGRES_PASSWORD`) |
 
 **With a desktop pgAdmin 4 already installed:**
 1. Start the DB: `docker compose up -d` (and confirm `docker compose ps` shows *healthy*).
