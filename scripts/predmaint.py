@@ -63,12 +63,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _cmd_lineage() -> int:
     from src.framework.db.engine import get_engine, is_available
+    from src.framework.lineage.dashboard import lineage_dashboard_markdown
     from src.framework.lineage.tracker import lineage_markdown
 
     if not is_available():
         logger.error("PostgreSQL not available — no lineage to show.")
         return 1
-    print(lineage_markdown(get_engine()))
+    engine = get_engine()
+    print("## Batches\n")
+    print(lineage_dashboard_markdown(engine))
+    print("\n## Latest batch — steps\n")
+    print(lineage_markdown(engine))
     return 0
 
 

@@ -169,6 +169,12 @@ def read_runs(engine: Engine, batch_id: str | None = None) -> pd.DataFrame:
     )
 
 
+def read_all_runs(engine: Engine) -> pd.DataFrame:
+    """Read every lineage row across all batches (for the dashboard)."""
+    table = f"{config.META_SCHEMA}.processing_runs"
+    return pd.read_sql(f"SELECT * FROM {table} ORDER BY started_at", engine)
+
+
 def lineage_markdown(engine: Engine, batch_id: str | None = None) -> str:
     """Markdown table of a batch's processing steps (the raw->gold lineage)."""
     df = read_runs(engine, batch_id)
