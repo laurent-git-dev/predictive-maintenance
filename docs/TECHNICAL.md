@@ -225,15 +225,108 @@ Enforced rule: **kernel ← framework ← use-case** (the framework never import
 | `meta` | `processing_runs` | one row per pipeline step (lineage) |
 
 ```powershell
-docker compose up -d                         # start PostgreSQL (5432)
+docker compose up -d                         # start PostgreSQL (container predictive_maintenance_db, 5432)
+docker compose ps                            # check it is "healthy"
 uv run alembic upgrade head                  # create/upgrade bronze + meta schemas
 uv run alembic revision -m "msg"             # new migration (after an ORM change)
-# Inspect: psql or any client with the .env credentials; or:
-uv run python scripts/predmaint.py lineage   # batch lineage + latest steps (needs DB)
 ```
 
 If PostgreSQL is unavailable, DB load is skipped with a warning; Silver/Gold still run on files
-(`--no-db`).
+(`--no-db`). The Gold layer then builds from the in-memory Silver frames.
+
+### 5.1 Inspect the database with pgAdmin
+
+Connection parameters (from `docker-compose.yml` / `.env`; the container port is published to the
+host):
+
+| Field | Value |
+|---|---|
+| Host | `localhost` |
+| Port | `5432` |
+| Maintenance DB | `predictive_maintenance` |
+| Username | `predictive` |
+| Password | `predictive` (your `.env` `POSTGRES_PASSWORD`) |
+
+**With a desktop pgAdmin 4 already installed:**
+1. Start the DB: `docker compose up -d` (and confirm `docker compose ps` shows *healthy*).
+2. pgAdmin → right-click **Servers → Register → Server…**
+   - **General → Name**: `Predictive Maintenance` (free text).
+   - **Connection → Host name/address**: `localhost` · **Port**: `5432` ·
+     **Maintenance database**: `predictive_maintenance` · **Username**: `predictive` ·
+     **Password**: `predictive` · tick *Save password*.
+   - **Save**.
+3. Browse: **Servers → Predictive Maintenance → Databases → predictive_maintenance → Schemas**,
+   then `bronze` / `silver` / `gold` / `meta` → **Tables**. Right-click a table → *View/Edit Data*,
+   or use the **Query Tool** (toolbar) to run SQL (see §5.2).
+
+**No pgAdmin installed? Run it as a container** (add this service to `docker-compose.yml`, then
+`docker compose up -d` and open <http://localhost:5050>):
+
+```yaml
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+```
+Inside that pgAdmin, register the server with **Host = `postgres`** (the compose service name,
+not `localhost`) and the same port/DB/credentials.
+
+> Alternatives: `psql` (`docker compose exec postgres psql -U predictive -d predictive_maintenance`),
+> or the VS Code *PostgreSQL* / *Database Client* extensions with the same parameters.
+
+### 5.2 Visualise the lineage (`meta.processing_runs`)
+
+Every `predmaint run` records **one row per step** in `meta.processing_runs`
+(`batch_id`, `step`, `layer`, `source`, `input_ref`/`output_ref`, timings, `status`,
+`rows_read`/`rows_ingested`/`rows_rejected`, `quality_ok`, `code_version` = git sha,
+`output_hash`, `details` JSON).
+
+**From the CLI** (markdown: a per-batch summary table + the latest batch's steps):
+```powershell
+uv run python scripts/predmaint.py lineage
+```
+
+**From the notebook** — the GOLD chapter appendix renders the same via
+`src.framework.lineage.dashboard.lineage_dashboard_markdown(engine)` /
+`tracker.lineage_markdown(engine)`; `dashboard.plot_batches(runs, out_dir)` writes a per-batch
+bar chart (rows ingested vs rejected).
+
+**From pgAdmin (Query Tool)** — ready-to-run SQL:
+
+```sql
+-- 1) Full lineage of the most recent run (one row per step, in order)
+SELECT step, layer, source, status, rows_read, rows_ingested, rows_rejected,
+       quality_ok, duration_s, code_version, output_hash
+FROM   meta.processing_runs
+WHERE  batch_id = (SELECT batch_id FROM meta.processing_runs
+                   ORDER BY started_at DESC LIMIT 1)
+ORDER  BY started_at;
+
+-- 2) Per-batch overview (most recent first) — same shape as `predmaint lineage`
+SELECT batch_id,
+       min(started_at)            AS started_at,
+       count(*)                   AS steps,
+       sum(rows_ingested)         AS rows_in,
+       sum(rows_rejected)         AS rows_rejected,
+       bool_and(quality_ok)       AS quality_ok,
+       count(*) FILTER (WHERE status <> 'success') AS failed_steps,
+       round(sum(duration_s)::numeric, 1)         AS duration_s,
+       max(code_version)          AS code_version
+FROM   meta.processing_runs
+GROUP  BY batch_id
+ORDER  BY started_at DESC;
+
+-- 3) Anything that failed or flagged a soft quality issue
+SELECT batch_id, step, layer, source, status, quality_ok, details
+FROM   meta.processing_runs
+WHERE  status <> 'success' OR quality_ok IS FALSE
+ORDER  BY started_at DESC;
+```
 
 ---
 
