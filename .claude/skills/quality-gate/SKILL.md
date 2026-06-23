@@ -12,7 +12,8 @@ Scope linters to the Python sources (the notebook has known, out-of-scope ruff f
 ```bash
 uv run ruff check src scripts tests conftest.py
 uv run black --check src scripts tests conftest.py
-uv run pytest -q                 # 30 tests incl. 10 golden (need data/raw; skipped if absent)
+uv run mypy                      # type check (config in pyproject; src/ only)
+uv run pytest -q                 # tests incl. golden (need data/raw; skipped if absent)
 ```
 
 ## Reporting
