@@ -21,6 +21,7 @@ def interpolate_by_group(
     time_col: str,
     columns: list[str],
     method: str = "time",
+    flag_col: str | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Interpolate missing values within each ``group_col``, ordered by ``time_col``.
 
@@ -36,6 +37,9 @@ def interpolate_by_group(
         Interpolation method passed to :meth:`pandas.Series.interpolate`
         (``"time"`` = linear with respect to the timestamps). Any leading/trailing gap
         is then closed by forward/backward fill.
+    flag_col : str, optional
+        If set, add a 0/1 column marking rows where **any** target column was missing
+        before filling (data-coverage signal for downstream layers).
 
     Returns
     -------
@@ -47,6 +51,9 @@ def interpolate_by_group(
     report: dict = {}
     if not present or group_col not in df.columns or time_col not in df.columns:
         return df, report
+
+    if flag_col is not None:
+        df[flag_col] = df[present].isna().any(axis=1).astype("int64")  # before any fill
 
     groups = df.assign(__t=pd.to_datetime(df[time_col], errors="coerce")).groupby(
         group_col, sort=False

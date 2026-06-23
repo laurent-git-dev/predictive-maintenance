@@ -24,8 +24,8 @@ _SPECS = {s.name: s for s in SOURCE_SPECS}
 # --- Frozen reference values (reference run) ---
 BRONZE_ROWS = {"incidents": 1245, "telemetry": 135626, "machine": 15, "machines": 1562}
 SILVER_ROWS = {"incidents": 1245, "telemetry": 134280, "maintenance": 1562}
-SILVER_HASH = {"telemetry": "28e8bdfa1384a68c", "maintenance": "c3de808ca7e364ac"}
-GOLD_ROWS, GOLD_COLS, GOLD_HASH = 134280, 239, "4d30ac2a96da017f"
+SILVER_HASH = {"telemetry": "d271ad8bc222b746", "maintenance": "c3de808ca7e364ac"}
+GOLD_ROWS, GOLD_COLS, GOLD_HASH = 134280, 251, "8c3bc7d3ab07e3bc"
 
 
 @pytest.fixture(scope="module")

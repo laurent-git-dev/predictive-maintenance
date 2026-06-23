@@ -38,6 +38,7 @@ def _synthetic_silver():
             config.MACHINE_COLUMN: "MACH-01",
             config.TELEMETRY_TIMESTAMP_COLUMN: ts,
             **{m: np.linspace(1.0, 2.0, N_HOURS) for m in config.TELEMETRY_PARAM_COLUMNS},
+            config.TELEMETRY_INTERPOLATED_COLUMN: 0,  # coverage flag (carried from Silver)
         }
     )
     incidents = pd.DataFrame(
@@ -90,6 +91,10 @@ def test_feature_groups_present():
         "over_capacity_flag",  # load
         "hour_sin",  # calendar
         "is_weekend",  # calendar
+        "power_proxy",  # physics
+        "co_anomaly_24h",  # physics
+        "temperature_c_drift_baseline",  # drift vs healthy baseline
+        "interp_frac_24h",  # data coverage
         "label_failure_next_6h",  # label
     }
     assert expected <= set(gold.columns)

@@ -14,3 +14,4 @@ gold:
   #   by_machine -> hold out whole machines (tests cross-machine generalisation)
   #   none       -> everything "train"
   split: { method: temporal, train_frac: 0.7, val_frac: 0.15 }
+  baseline_hours: 168 # healthy-baseline window per machine for the *_drift_baseline features

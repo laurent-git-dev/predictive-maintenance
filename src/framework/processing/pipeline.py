@@ -66,6 +66,7 @@ def apply_processing(df: pd.DataFrame, config: ProcessingConfig) -> tuple[pd.Dat
             config.interpolate["time"],
             config.interpolate["columns"],
             config.interpolate.get("method", "time"),
+            config.interpolate.get("flag"),
         )
     if config.encode:
         df, report["encode"] = encode_categorical(df, config.encode)

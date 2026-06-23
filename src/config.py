@@ -86,6 +86,8 @@ TELEMETRY_RUNS_REGISTRY_PATH: Path = TELEMETRY_ARTIFACTS_DIR / "runs_registry.js
 
 TELEMETRY_TIMESTAMP_COLUMN: str = "timestamp"
 TELEMETRY_PIECES_COLUMN: str = "pieces_produced"
+# Flag added in Silver marking rows whose measures were filled by interpolation (data coverage).
+TELEMETRY_INTERPOLATED_COLUMN: str = "was_interpolated"
 # Numeric parameters measured per machine over time.
 TELEMETRY_PARAM_COLUMNS: tuple[str, ...] = (
     "temperature_c",

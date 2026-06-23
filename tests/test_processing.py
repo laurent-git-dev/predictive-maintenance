@@ -36,6 +36,13 @@ def test_interpolate_by_group_fills_gaps_without_residual_nan():
     assert report["x"]["n_filled"] == 2
 
 
+def test_interpolate_flag_marks_filled_rows():
+    t = pd.date_range("2025-01-01", periods=4, freq="h")
+    df = pd.DataFrame({"m": "M1", "ts": t, "x": [1.0, np.nan, 3.0, 4.0]})
+    out, _ = interpolate_by_group(df, "m", "ts", ["x"], flag_col="was_interp")
+    assert out["was_interp"].tolist() == [0, 1, 0, 0]  # only the originally-missing row flagged
+
+
 def test_impute_median_fills_only_missing():
     df = pd.DataFrame({"v": [1.0, np.nan, 3.0]})
     out, report = impute(df, {"v": "median"})

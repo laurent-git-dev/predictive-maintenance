@@ -35,11 +35,22 @@ def feature_groups(df: pd.DataFrame) -> dict[str, list[str]]:
             "machine",
             "load",
             "calendar",
+            "physics",
+            "drift",
+            "coverage",
             "labels",
         )
     }
     _load = {"utilization", "over_capacity_flag", "utilization_mean_24h"}
     _calendar = {"hour_sin", "hour_cos", "dow_sin", "dow_cos", "is_weekend"}
+    _physics = {
+        "power_proxy",
+        "power_proxy_mean_24h",
+        "temp_pressure_ratio",
+        "efficiency_pieces_per_krpm",
+        "co_anomaly_24h",
+    }
+    _coverage = {"interpolated_now", "interp_frac_24h", "hours_since_real_obs"}
     for c in df.columns:
         if c in _IDS:
             groups["identifiers"].append(c)
@@ -51,6 +62,12 @@ def feature_groups(df: pd.DataFrame) -> dict[str, list[str]]:
             groups["load"].append(c)
         elif c in _calendar:
             groups["calendar"].append(c)
+        elif c in _physics:
+            groups["physics"].append(c)
+        elif c in _coverage:
+            groups["coverage"].append(c)
+        elif c.endswith("_drift_baseline"):
+            groups["drift"].append(c)
         elif c.startswith("fail_") or c == "failure_now":
             groups["recurrence"].append(c)
         elif "_trend_" in c:

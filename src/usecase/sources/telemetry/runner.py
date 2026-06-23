@@ -56,6 +56,7 @@ PROCESSING = ProcessingConfig(
         "time": config.TELEMETRY_TIMESTAMP_COLUMN,
         "columns": list(MEASURES),
         "method": "time",
+        "flag": config.TELEMETRY_INTERPOLATED_COLUMN,  # mark filled rows (data coverage)
     },
     # Outliers intentionally NOT clipped: IQR winsorisation piled mass at the fence (an
     # artificial spike at the distribution end). Raw extremes are kept for analysis.

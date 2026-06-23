@@ -37,6 +37,7 @@ _GOLD_DEFAULTS = {
     "maintenance_windows_d": {"5d": 5, "10d": 10, "20d": 20, "30d": 30, "60d": 60},
     "label_horizons": {"6h": 6, "12h": 12, "24h": 24, "48h": 48},
     "split": _DEFAULT_SPLIT,
+    "baseline_hours": 168,  # healthy-baseline window per machine (drift features)
 }
 
 
@@ -53,7 +54,9 @@ def load_gold_params() -> dict:
 _P = load_gold_params()
 FAILURE_SEVERITY_MIN = int(_P["failure_severity_min"])  # incident severity >= this = failure
 MEASURES = list(config.TELEMETRY_PARAM_COLUMNS)  # 5 telemetry measures (incl. pieces_produced)
+SENSOR_MEASURES = [m for m in MEASURES if m != config.TELEMETRY_PIECES_COLUMN]  # 4 physical sensors
 SIGNALS = list(config.SIGNAL_COLUMNS)  # 9 type_* signals
+BASELINE_HOURS = int(_P.get("baseline_hours", 168))  # healthy-baseline window (drift features)
 MEM_H = list(_P["memory_horizons_h"])  # memory horizons (hours)
 TREND_H = list(_P["trend_horizons_h"])  # trend horizons (hours)
 EVENT_H = list(_P["event_horizons"].items())  # incident/signal horizons (label, hours)
@@ -322,6 +325,39 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     # --- Calendar: cyclical time-of-day / day-of-week (depends only on t) ---
     feat.update(_calendar_features(df[WS]))
+
+    # --- Physics / interactions (current hour; co-anomaly uses the causal 24h z-scores) ---
+    volt = pd.to_numeric(df["voltage_mean_v"], errors="coerce")
+    rpm = pd.to_numeric(df["rotation_mean_rpm"], errors="coerce")
+    temp = pd.to_numeric(df["temperature_c"], errors="coerce")
+    press = pd.to_numeric(df["pressure_bar"], errors="coerce")
+    pieces = pd.to_numeric(df[config.TELEMETRY_PIECES_COLUMN], errors="coerce")
+    power = volt * rpm
+    feat["power_proxy"] = power  # electrical/mechanical load proxy
+    feat["power_proxy_mean_24h"] = power.groupby(df[mc]).transform(
+        lambda s: s.rolling(24, min_periods=1).mean()
+    )
+    feat["temp_pressure_ratio"] = temp / press.where(press != 0)
+    feat["efficiency_pieces_per_krpm"] = pieces / (rpm / 1000).where(rpm != 0)
+    z24 = pd.DataFrame({m: feat[f"{m}_z_24h"] for m in MEASURES})
+    feat["co_anomaly_24h"] = (z24.abs() > 3).sum(axis=1).astype("int64")  # multi-sensor anomaly
+
+    # --- Drift vs the machine's healthy baseline (median of its first BASELINE_HOURS hours) ---
+    # Causal: emitted only once the baseline window is fully in the past (NaN before).
+    pos = g.cumcount()
+    for m in SENSOR_MEASURES:
+        base = g[m].transform(lambda s: s.head(BASELINE_HOURS).median())
+        feat[f"{m}_drift_baseline"] = (df[m] - base).where(pos >= BASELINE_HOURS)
+
+    # --- Data coverage: how much of the recent window was interpolated (feature confidence) ---
+    interp = config.TELEMETRY_INTERPOLATED_COLUMN
+    if interp in df.columns:
+        flag = pd.to_numeric(df[interp], errors="coerce").fillna(0)
+        feat["interpolated_now"] = flag.astype("int64")
+        feat["interp_frac_24h"] = flag.groupby(df[mc]).transform(
+            lambda s: s.rolling(24, min_periods=1).mean()
+        )
+        feat["hours_since_real_obs"] = _hours_since_last(df.assign(_real=1 - flag), "_real", mc)
 
     # --- Labels: failure (severity >= threshold) in the future window (censored at series end) ---
     for label, h in LABEL_H:
