@@ -23,6 +23,11 @@ a temporal **leak**, **missing** high-value features, and no evaluation split.
 - **Split:** `split_set` is assigned from `params.yaml` (`gold.split`): `temporal` (global cut,
   test = most recent period; default), `by_machine`, or `none`. Enables honest evaluation
   (no random shuffle across autocorrelated rows).
+- **Target axes (D):** threshold (`failure_severity_min`) and horizons (`label_horizons`) were
+  already parametrable; added a **time-to-failure** target (`label_ttf_hours` + `label_ttf_censored`
+  for right-censoring) and an **onset** option (`failure_refractory_h`>0 makes the labels predict
+  *new* failure episodes spaced by the refractory; default 0 = any failure hour, unchanged).
+  `failure_now` lets the modeller drop ongoing-failure rows.
 
 ## Consequences
 - The reference golden hash changes (216→239 cols) — updated deliberately; new tests pin the

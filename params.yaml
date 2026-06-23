@@ -15,3 +15,4 @@ gold:
   #   none       -> everything "train"
   split: { method: temporal, train_frac: 0.7, val_frac: 0.15 }
   baseline_hours: 168 # healthy-baseline window per machine for the *_drift_baseline features
+  failure_refractory_h: 0 # >0: only failures spaced by >this count as a new onset (labels + TTF)

@@ -133,3 +133,29 @@ def test_split_set_is_temporal_and_partitions():
     train_max = gold.loc[gold["split_set"] == "train", WS].max()
     test_min = gold.loc[gold["split_set"] == "test", WS].min()
     assert train_max < test_min  # temporal: train strictly precedes test
+
+
+def test_time_to_failure_label():
+    gold = build_gold_features(_synthetic_silver()).set_index(WS)
+    ttf = gold["label_ttf_hours"]
+    assert ttf.loc[BASE] == 9  # failure at hour 9
+    assert ttf.loc[BASE + pd.Timedelta(hours=8)] == 1
+    assert pd.isna(ttf.loc[BASE + pd.Timedelta(hours=9)])  # nothing strictly after hour 9
+    assert gold["label_ttf_censored"].loc[BASE + pd.Timedelta(hours=9)] == 1
+
+
+def test_failure_refractory_collapses_onsets(monkeypatch):
+    silver = _synthetic_silver()
+    extra = silver["incidents"].iloc[[0]].copy()
+    extra[config.TIME_COLUMN] = "11:00:00"  # a second failure 2h after the first
+    silver["incidents"] = pd.concat([silver["incidents"], extra], ignore_index=True)
+
+    # No refractory: from hour 10 the next failure is at hour 11 -> TTF = 1.
+    base = build_gold_features(silver).set_index(WS)
+    assert base["label_ttf_hours"].loc[BASE + pd.Timedelta(hours=10)] == 1
+
+    # Refractory 5h: the failure at 11 is within 5h of the one at 9, so it is NOT a new onset
+    # -> no onset strictly after hour 10 -> censored.
+    monkeypatch.setattr("src.usecase.gold.features.FAILURE_REFRACTORY_H", 5)
+    refr = build_gold_features(silver).set_index(WS)
+    assert pd.isna(refr["label_ttf_hours"].loc[BASE + pd.Timedelta(hours=10)])

@@ -38,6 +38,7 @@ _GOLD_DEFAULTS = {
     "label_horizons": {"6h": 6, "12h": 12, "24h": 24, "48h": 48},
     "split": _DEFAULT_SPLIT,
     "baseline_hours": 168,  # healthy-baseline window per machine (drift features)
+    "failure_refractory_h": 0,  # >0: only failures spaced >this count as a new onset (labels)
 }
 
 
@@ -57,6 +58,7 @@ MEASURES = list(config.TELEMETRY_PARAM_COLUMNS)  # 5 telemetry measures (incl. p
 SENSOR_MEASURES = [m for m in MEASURES if m != config.TELEMETRY_PIECES_COLUMN]  # 4 physical sensors
 SIGNALS = list(config.SIGNAL_COLUMNS)  # 9 type_* signals
 BASELINE_HOURS = int(_P.get("baseline_hours", 168))  # healthy-baseline window (drift features)
+FAILURE_REFRACTORY_H = int(_P.get("failure_refractory_h", 0))  # 0 = every failure hour is an onset
 MEM_H = list(_P["memory_horizons_h"])  # memory horizons (hours)
 TREND_H = list(_P["trend_horizons_h"])  # trend horizons (hours)
 EVENT_H = list(_P["event_horizons"].items())  # incident/signal horizons (label, hours)
@@ -128,6 +130,27 @@ def _future_failure(df: pd.DataFrame, hour_flag: str, mc: str, horizon: int) -> 
     mask = out.notna()
     label[mask] = (out[mask] > 0).astype("Int64")
     return label
+
+
+def _time_to_failure(df: pd.DataFrame, hour_flag: str, mc: str) -> pd.Series:
+    """Hours until the next ``hour_flag`` event strictly after ``t`` (NaN if none observed).
+
+    Regression / survival target. NaN = right-censored (no future failure in the series).
+    The hourly grid is contiguous per machine, so a position delta equals hours.
+    """
+    out = pd.Series(np.nan, index=df.index, dtype="float64")
+    for _, idx in df.groupby(mc, sort=False).groups.items():
+        sub = df.loc[idx].sort_values(WS)
+        f = (pd.to_numeric(sub[hour_flag], errors="coerce") > 0).to_numpy()
+        fpos = np.flatnonzero(f)
+        n = len(f)
+        vals = np.full(n, np.nan)
+        if len(fpos):
+            nxt = np.searchsorted(fpos, np.arange(n), side="right")  # first failure pos > i
+            has = nxt < len(fpos)
+            vals[has] = fpos[nxt[has]] - np.arange(n)[has]
+        out.loc[sub.index] = vals
+    return out
 
 
 def _per_hour_tables(silver: dict, mc: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -237,6 +260,18 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
     df = df.merge(dim, on=mc, how="left")
     df = df.sort_values([mc, WS]).reset_index(drop=True)
     g = df.groupby(mc, sort=False)
+
+    # Label event: every failure hour (default), or only failure ONSETs spaced by a refractory
+    # period (failure_refractory_h > 0 -> predict new episodes rather than any failure hour).
+    if FAILURE_REFRACTORY_H > 0:
+        prior = (
+            g["_fail"]
+            .transform(lambda s: s.rolling(FAILURE_REFRACTORY_H, min_periods=1).sum().shift(1))
+            .fillna(0)
+        )
+        df["_fail_label"] = ((df["_fail"] > 0) & (prior == 0)).astype("int64")
+    else:
+        df["_fail_label"] = df["_fail"].astype("int64")
 
     feat: dict[str, pd.Series] = {}
 
@@ -361,7 +396,10 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     # --- Labels: failure (severity >= threshold) in the future window (censored at series end) ---
     for label, h in LABEL_H:
-        feat[f"label_failure_next_{label}"] = _future_failure(df, "_fail", mc, h)
+        feat[f"label_failure_next_{label}"] = _future_failure(df, "_fail_label", mc, h)
+    # Time-to-failure (regression / survival): hours to the next failure; censored -> NaN.
+    feat["label_ttf_hours"] = _time_to_failure(df, "_fail_label", mc)
+    feat["label_ttf_censored"] = feat["label_ttf_hours"].isna().astype("int64")
 
     features = pd.DataFrame(feat, index=df.index)
     float_cols = features.select_dtypes("float").columns
