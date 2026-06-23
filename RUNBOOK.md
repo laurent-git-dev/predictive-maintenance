@@ -38,13 +38,18 @@ This machine intercepts TLS, which breaks default certificate validation. Workar
 ## 1. Run the full pipeline
 
 ```powershell
-uv run python scripts/run_pipeline.py
-# Without the database step:
-# uv run python scripts/run_pipeline.py --no-db
+# Unified CLI (preferred):
+uv run python scripts/predmaint.py run            # full pipeline (+ DB load)
+uv run python scripts/predmaint.py run --no-db    # skip the database load
+uv run python scripts/predmaint.py source telemetry [--no-db]   # a single source
+uv run python scripts/predmaint.py lineage        # latest batch lineage (needs DB)
+
+# Equivalent legacy scripts (still available):
+# uv run python scripts/run_pipeline.py [--no-db]
 ```
 
-Creates new timestamped run folders `YYYYMMDDHHMM` under
-`artifacts/ingestions/<source>/<run>/{bronze,silver}/` and
+Creates new timestamped run folders (one shared `batch_id` per run) under
+`artifacts/ingestions/<source>/<run>/{bronze,silver}/`, `artifacts/gold/<run>/` and
 `artifacts/analyses/cross_source/<run>/`, and updates each `runs_registry.json`.
 
 ---
