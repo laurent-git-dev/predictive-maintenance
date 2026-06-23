@@ -25,7 +25,7 @@ _SPECS = {s.name: s for s in SOURCE_SPECS}
 BRONZE_ROWS = {"incidents": 1245, "telemetry": 135626, "machine": 15, "machines": 1562}
 SILVER_ROWS = {"incidents": 1245, "telemetry": 134280, "maintenance": 1562}
 SILVER_HASH = {"telemetry": "28e8bdfa1384a68c", "maintenance": "c3de808ca7e364ac"}
-GOLD_ROWS, GOLD_COLS, GOLD_HASH = 134280, 216, "69fbf826237bb18d"
+GOLD_ROWS, GOLD_COLS, GOLD_HASH = 134280, 239, "4d30ac2a96da017f"
 
 
 @pytest.fixture(scope="module")

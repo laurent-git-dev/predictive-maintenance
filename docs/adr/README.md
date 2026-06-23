@@ -15,3 +15,4 @@ append-only; supersede rather than rewrite.
 | [0007](0007-copy-bulk-load.md) | Bulk-load via PostgreSQL COPY | Accepted |
 | [0008](0008-gold-params-no-dvc-dag.md) | Gold spec in params.yaml; no DVC DAG | Accepted |
 | [0009](0009-schema-contract-drift-guard.md) | Pydantic↔ORM drift guard instead of generated ORM | Accepted |
+| [0010](0010-gold-enrichment-and-leakage-fix.md) | Gold feature enrichment, leakage fix, train/val/test split | Accepted |

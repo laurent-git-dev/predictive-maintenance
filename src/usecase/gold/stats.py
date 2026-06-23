@@ -22,23 +22,40 @@ _LABELS = [f"label_failure_next_{lab}" for lab, _ in LABEL_H]
 def feature_groups(df: pd.DataFrame) -> dict[str, list[str]]:
     """Classify columns into feature groups (identifiers, memory, trend, … labels)."""
     groups: dict[str, list[str]] = {
-        "identifiers": [],
-        "memory": [],
-        "trend": [],
-        "anomaly": [],
-        "context_incidents": [],
-        "context_signals": [],
-        "context_maintenance": [],
-        "labels": [],
+        k: []
+        for k in (
+            "identifiers",
+            "memory",
+            "trend",
+            "anomaly",
+            "context_incidents",
+            "context_signals",
+            "context_maintenance",
+            "recurrence",
+            "machine",
+            "load",
+            "calendar",
+            "labels",
+        )
     }
+    _load = {"utilization", "over_capacity_flag", "utilization_mean_24h"}
+    _calendar = {"hour_sin", "hour_cos", "dow_sin", "dow_cos", "is_weekend"}
     for c in df.columns:
         if c in _IDS:
             groups["identifiers"].append(c)
         elif c.startswith("label_"):
             groups["labels"].append(c)
+        elif c.startswith("machine_"):
+            groups["machine"].append(c)
+        elif c in _load:
+            groups["load"].append(c)
+        elif c in _calendar:
+            groups["calendar"].append(c)
+        elif c.startswith("fail_") or c == "failure_now":
+            groups["recurrence"].append(c)
         elif "_trend_" in c:
             groups["trend"].append(c)
-        elif c.endswith("_z_24h") or c.endswith("_z_machine"):
+        elif c.endswith("_z_24h") or c.endswith("_z_hist"):
             groups["anomaly"].append(c)
         elif c.startswith("sig_"):
             groups["context_signals"].append(c)

@@ -9,3 +9,8 @@ gold:
   label_horizons: { "6h": 6, "12h": 12, "24h": 24, "48h": 48 } # failure-in-next-X targets
   event_horizons: { "6h": 6, "12h": 12, "24h": 24, "48h": 48, "7d": 168 } # incident/signal counts
   maintenance_windows_d: { "5d": 5, "10d": 10, "20d": 20, "30d": 30, "60d": 60 } # maint. counts
+  # Train/val/test assignment written to `split_set`:
+  #   temporal   -> global cut on window_start (test = most recent period; default, no leakage)
+  #   by_machine -> hold out whole machines (tests cross-machine generalisation)
+  #   none       -> everything "train"
+  split: { method: temporal, train_frac: 0.7, val_frac: 0.15 }

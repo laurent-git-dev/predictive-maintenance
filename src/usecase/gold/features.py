@@ -7,7 +7,11 @@ context) look up to and **including** the current hour; **labels** look **strict
 
 Telemetry is a contiguous hourly grid per machine, so the ``-Nh`` windows are exact
 (count-based). Feature groups: identifiers, memory (rolling mean/max/std), trend (rolling
-OLS slope), anomaly (z-scores), context (incidents / signals / maintenance) and labels.
+OLS slope), anomaly (z vs 24h and vs the machine's history **so far** — expanding, causal),
+context (incidents / signals / maintenance), recurrence (past failures), machine (static
+dimension + age), load (utilisation vs capacity), calendar (cyclical) and labels.
+``split_set`` (train/val/test) is assigned per ``params.yaml`` (temporal by default). All
+features are strictly causal (≤ ``t``); no statistic peeks at the future.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from src.framework.timeutils import to_naive_hour
 logger = logging.getLogger(__name__)
 
 # Gold spec defaults (reproduce the reference table). Overridable via params.yaml → gold.*
+_DEFAULT_SPLIT: dict = {"method": "temporal", "train_frac": 0.7, "val_frac": 0.15}
 _GOLD_DEFAULTS = {
     "failure_severity_min": 4,
     "memory_horizons_h": [2, 3, 4, 6, 12, 24, 48],
@@ -31,6 +36,7 @@ _GOLD_DEFAULTS = {
     "event_horizons": {"6h": 6, "12h": 12, "24h": 24, "48h": 48, "7d": 168},
     "maintenance_windows_d": {"5d": 5, "10d": 10, "20d": 20, "30d": 30, "60d": 60},
     "label_horizons": {"6h": 6, "12h": 12, "24h": 24, "48h": 48},
+    "split": _DEFAULT_SPLIT,
 }
 
 
@@ -53,21 +59,26 @@ TREND_H = list(_P["trend_horizons_h"])  # trend horizons (hours)
 EVENT_H = list(_P["event_horizons"].items())  # incident/signal horizons (label, hours)
 MNT_D = list(_P["maintenance_windows_d"].items())  # maintenance windows (label, days)
 LABEL_H = list(_P["label_horizons"].items())  # label horizons (label, hours)
+SPLIT = {**_DEFAULT_SPLIT, **(_P.get("split") or {})}  # train/val/test policy
 WS, WE = "window_start", "window_end"
 
-# Representative subset for the layer profiling (the full table is ~216 columns).
+# Representative subset for the layer profiling (the full table is ~240 columns).
 FEATURES_NUMERIC = [
     *[f"{m}_mean_24h" for m in MEASURES],
-    *[f"{m}_z_machine" for m in MEASURES],
+    *[f"{m}_z_hist" for m in MEASURES],
+    "utilization",
+    "machine_age_years",
     "inc_hours_since_last",
+    "fail_hours_since_last",
     "mnt_corr_days_since_last",
 ]
 FEATURES_COUNT = [
     "label_failure_next_6h",
     "label_failure_next_24h",
     "label_failure_next_48h",
-    "inc_count_24h",
-    "mnt_corr_count_30d",
+    "fail_count_24h",
+    "over_capacity_flag",
+    "is_weekend",
 ]
 
 
@@ -144,6 +155,62 @@ def _per_hour_tables(silver: dict, mc: str) -> tuple[pd.DataFrame, pd.DataFrame]
     return inc_hour, mnt_hour
 
 
+def _machine_dimension(silver: dict, mc: str) -> tuple[pd.DataFrame, list[str]]:
+    """Static per-machine attributes (the dimension denormalised into silver.maintenance)."""
+    mnt = silver["maintenance"]
+    candidates = [
+        f"{config.MACHINE_CRITICALITY_COLUMN}_code",
+        f"{config.MACHINE_MODEL_COLUMN}_code",
+        f"{config.MACHINE_LINE_COLUMN}_code",
+        f"{config.MACHINE_LOCATION_COLUMN}_code",
+        config.MACHINE_MAX_DAILY_COLUMN,
+        config.MACHINE_MAX_HOURLY_COLUMN,
+        config.MACHINE_COMMISSIONING_COLUMN,
+    ]
+    present = [c for c in candidates if c in mnt.columns]
+    dim = mnt[[mc, *present]].drop_duplicates(mc).reset_index(drop=True)
+    return dim, present
+
+
+def _calendar_features(ws: pd.Series) -> dict[str, pd.Series]:
+    """Cyclical calendar features from the window start (depend only on ``t``; no leakage)."""
+    hour, dow = ws.dt.hour, ws.dt.dayofweek
+    two_pi = 2 * np.pi
+    return {
+        "hour_sin": np.sin(two_pi * hour / 24),
+        "hour_cos": np.cos(two_pi * hour / 24),
+        "dow_sin": np.sin(two_pi * dow / 7),
+        "dow_cos": np.cos(two_pi * dow / 7),
+        "is_weekend": (dow >= 5).astype("int64"),
+    }
+
+
+def _assign_split(df: pd.DataFrame, mc: str, split: dict) -> pd.Series:
+    """Assign train/val/test. ``temporal`` = global cut on time (test = most recent period);
+    ``by_machine`` = hold out whole machines; ``none`` = all train."""
+    method = split.get("method", "temporal")
+    train_frac = float(split.get("train_frac", 0.7))
+    val_frac = float(split.get("val_frac", 0.15))
+    if method == "none":
+        return pd.Series("train", index=df.index)
+    if method == "by_machine":
+        machines = sorted(df[mc].unique())
+        n = len(machines)
+        n_train = max(1, round(train_frac * n))
+        n_val = round(val_frac * n)
+        assign = {
+            m: ("train" if i < n_train else "val" if i < n_train + n_val else "test")
+            for i, m in enumerate(machines)
+        }
+        return df[mc].map(assign)
+    t_train = df[WS].quantile(train_frac)
+    t_val = df[WS].quantile(train_frac + val_frac)
+    return pd.Series(
+        np.where(df[WS] <= t_train, "train", np.where(df[WS] <= t_val, "val", "test")),
+        index=df.index,
+    )
+
+
 def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """Build the unified Gold feature table from the Silver frames (one row per machine-hour)."""
     mc = config.MACHINE_COLUMN
@@ -162,6 +229,9 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
     df = sp.merge(inc_hour, on=[mc, WS], how="left").merge(mnt_hour, on=[mc, WS], how="left")
     hour_cols = ["_inc", "_sevmax", "_fail", *SIGNALS, "_corr", "_prov"]
     df[hour_cols] = df[hour_cols].fillna(0)
+
+    dim, dim_cols = _machine_dimension(silver, mc)  # static machine attributes (broadcast)
+    df = df.merge(dim, on=mc, how="left")
     df = df.sort_values([mc, WS]).reset_index(drop=True)
     g = df.groupby(mc, sort=False)
 
@@ -183,12 +253,14 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
                 lambda s, h=h: s.rolling(h, min_periods=2).apply(_slope, raw=True)
             )
 
-    # --- Anomaly: z-score vs trailing 24h and vs the machine over all data ---
+    # --- Anomaly: z vs trailing 24h, and vs the machine's history SO FAR (causal: expanding) ---
     for m in MEASURES:
         mean24 = g[m].transform(lambda s: s.rolling(24, min_periods=1).mean())
         std24 = g[m].transform(lambda s: s.rolling(24, min_periods=2).std())
         feat[f"{m}_z_24h"] = (df[m] - mean24) / std24
-        feat[f"{m}_z_machine"] = (df[m] - g[m].transform("mean")) / g[m].transform("std")
+        mean_hist = g[m].transform(lambda s: s.expanding(min_periods=2).mean())
+        std_hist = g[m].transform(lambda s: s.expanding(min_periods=2).std())
+        feat[f"{m}_z_hist"] = (df[m] - mean_hist) / std_hist
 
     # --- Context: incidents (count + max severity per horizon) + recency ---
     for label, h in EVENT_H:
@@ -199,6 +271,15 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
             lambda s, h=h: s.rolling(h, min_periods=1).max()
         )
     feat["inc_hours_since_last"] = _hours_since_last(df, "_inc", mc)
+
+    # --- Context: past FAILURES (severity >= threshold) — recurrence is strongly predictive ---
+    for label, h in EVENT_H:
+        feat[f"fail_count_{label}"] = g["_fail"].transform(
+            lambda s, h=h: s.rolling(h, min_periods=1).sum()
+        )
+    feat["fail_count_cum"] = g["_fail"].cumsum()  # all past failures up to & incl. t
+    feat["fail_hours_since_last"] = _hours_since_last(df, "_fail", mc)
+    feat["failure_now"] = df["_fail"].astype("int64")  # flag to exclude ongoing-failure rows
 
     # --- Context: signal activations per horizon ---
     for s in SIGNALS:
@@ -220,7 +301,29 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
     feat["mnt_corr_days_since_last"] = _hours_since_last(df, "_corr", mc) / 24
     feat["mnt_prov_days_since_last"] = _hours_since_last(df, "_prov", mc) / 24
 
-    # --- Labels: failure (severity >= 4) in the future window (censored at the series end) ---
+    # --- Machine context: static dimension attributes (broadcast per machine) + age at t ---
+    for col in dim_cols:
+        if col != config.MACHINE_COMMISSIONING_COLUMN:
+            feat[f"machine_{col}"] = df[col]
+    if config.MACHINE_COMMISSIONING_COLUMN in dim_cols:
+        comm = pd.to_datetime(df[config.MACHINE_COMMISSIONING_COLUMN], errors="coerce")
+        feat["machine_age_years"] = (df[WS] - comm).dt.total_seconds() / (365.25 * 24 * 3600)
+
+    # --- Load: production vs the machine's hourly capacity (current hour + trailing 24h) ---
+    if config.MACHINE_MAX_HOURLY_COLUMN in dim_cols:
+        cap = pd.to_numeric(df[config.MACHINE_MAX_HOURLY_COLUMN], errors="coerce")
+        pieces = pd.to_numeric(df[config.TELEMETRY_PIECES_COLUMN], errors="coerce")
+        util = pieces / cap.where(cap > 0)
+        feat["utilization"] = util
+        feat["over_capacity_flag"] = (util > 1).astype("int64")
+        feat["utilization_mean_24h"] = util.groupby(df[mc]).transform(
+            lambda s: s.rolling(24, min_periods=1).mean()
+        )
+
+    # --- Calendar: cyclical time-of-day / day-of-week (depends only on t) ---
+    feat.update(_calendar_features(df[WS]))
+
+    # --- Labels: failure (severity >= threshold) in the future window (censored at series end) ---
     for label, h in LABEL_H:
         feat[f"label_failure_next_{label}"] = _future_failure(df, "_fail", mc, h)
 
@@ -233,7 +336,7 @@ def build_gold_features(silver: dict[str, pd.DataFrame]) -> pd.DataFrame:
             mc: df[mc],
             WS: df[WS],
             WE: df[WS] + pd.Timedelta(hours=1),
-            "split_set": "train",
+            "split_set": _assign_split(df, mc, SPLIT),
         }
     )
     gold = pd.concat([ids, features], axis=1)
