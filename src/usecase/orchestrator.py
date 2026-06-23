@@ -79,7 +79,8 @@ def run_source(spec: SourceSpec, engine=None, batch: Batch | None = None) -> dic
         with batch.step(
             "ingest",
             layer="bronze",
-            source=spec.name,
+            # Disambiguate the two machines.sql sources: machines_machine / machines_maintenance.
+            source=config.source_artifacts_dirname(spec.name),
             input_ref=f"datalake/{spec.raw_ref or spec.name}",
             output_ref=out_ref,
         ) as st:
@@ -120,7 +121,12 @@ def run_source(spec: SourceSpec, engine=None, batch: Batch | None = None) -> dic
             f"{config.SILVER_SCHEMA}.{spec.table}",
         )
         with batch.step(
-            "refine", layer="silver", source=spec.name, input_ref=in_ref, output_ref=out_ref
+            # Silver merges the dimension into the maintenance facts -> label by the Silver table.
+            "refine",
+            layer="silver",
+            source=spec.table,
+            input_ref=in_ref,
+            output_ref=out_ref,
         ) as st:
             silver_df, report, sstats = refine_silver(spec.name, engine)
             qok, qdet = check_quality(out_ref, silver_df, engine, batch.batch_id)
