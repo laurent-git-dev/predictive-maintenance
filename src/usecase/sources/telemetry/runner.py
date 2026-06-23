@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 
+import yaml
+
 from src import config
 from src.framework.processing.pipeline import ProcessingConfig, apply_processing
 from src.usecase.ingestion.schemas import TelemetryRow
@@ -46,22 +48,46 @@ TIMESERIES = [
 # Whole-source overview (measures over time).
 OVERVIEW = overview.plots
 
-PROCESSING = ProcessingConfig(
-    # Reconcile conflicting duplicate readings for the same (machine, hour) by averaging.
-    dedup={"keys": [config.MACHINE_COLUMN, config.TELEMETRY_TIMESTAMP_COLUMN], "strategy": "mean"},
-    # Telemetry is an hourly per-machine series: fill gaps by time interpolation within each
-    # machine. A global median would instead inject an artificial spike at the median value.
-    interpolate={
-        "group": config.MACHINE_COLUMN,
-        "time": config.TELEMETRY_TIMESTAMP_COLUMN,
-        "columns": list(MEASURES),
-        "method": "time",
-        "flag": config.TELEMETRY_INTERPOLATED_COLUMN,  # mark filled rows (data coverage)
-    },
-    # Outliers intentionally NOT clipped: IQR winsorisation piled mass at the fence (an
-    # artificial spike at the distribution end). Raw extremes are kept for analysis.
-    normalize={param: "zscore" for param in MEASURES},
-)
+
+def _make_processing(interpolate: bool = True, clip_outliers: bool = False) -> ProcessingConfig:
+    """Telemetry Silver config. Defaults reproduce the reference treatment; the two flags are
+    experiment knobs (params.yaml → ``silver.telemetry``):
+
+    - ``interpolate=False`` -> leave gaps as NaN (NaN-aware variant; no coverage flag).
+    - ``clip_outliers=True`` -> IQR-winsorise the measures (the behaviour that piled mass at the
+      fence — kept off by default, available for comparison).
+    """
+    cfg: dict = {
+        "dedup": {
+            "keys": [config.MACHINE_COLUMN, config.TELEMETRY_TIMESTAMP_COLUMN],
+            "strategy": "mean",
+        },
+        "normalize": {param: "zscore" for param in MEASURES},
+    }
+    if interpolate:
+        cfg["interpolate"] = {
+            "group": config.MACHINE_COLUMN,
+            "time": config.TELEMETRY_TIMESTAMP_COLUMN,
+            "columns": list(MEASURES),
+            "method": "time",
+            "flag": config.TELEMETRY_INTERPOLATED_COLUMN,  # mark filled rows (data coverage)
+        }
+    if clip_outliers:
+        cfg["outliers"] = list(MEASURES)
+    return ProcessingConfig(**cfg)
+
+
+# Default config (reference treatment) — also exposed to the registry for display.
+PROCESSING = _make_processing()
+
+
+def _silver_params() -> dict:
+    """Read ``silver.telemetry`` overrides from params.yaml (empty = reference treatment)."""
+    path = config.PROJECT_ROOT / "params.yaml"
+    if not path.exists():
+        return {}
+    silver = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("silver") or {}
+    return silver.get("telemetry") or {}
 
 
 def load_bronze(input_path=None):
@@ -72,6 +98,12 @@ def load_bronze(input_path=None):
 def to_silver(bronze_df):
     """Treatment only: dedup + per-machine time interpolation + z-score on the measures.
 
-    ``pieces_produced`` is kept raw. Returns ``(silver_df, report)``.
+    ``pieces_produced`` is kept raw. Interpolation / outlier-clipping are configurable via
+    ``params.yaml`` (``silver.telemetry``) for dataset experiments. Returns ``(silver_df, report)``.
     """
-    return apply_processing(bronze_df, PROCESSING)
+    p = _silver_params()
+    cfg = _make_processing(
+        interpolate=bool(p.get("interpolate", True)),
+        clip_outliers=bool(p.get("clip_outliers", False)),
+    )
+    return apply_processing(bronze_df, cfg)

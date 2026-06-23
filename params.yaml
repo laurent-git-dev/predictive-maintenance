@@ -16,3 +16,9 @@ gold:
   split: { method: temporal, train_frac: 0.7, val_frac: 0.15 }
   baseline_hours: 168 # healthy-baseline window per machine for the *_drift_baseline features
   failure_refractory_h: 0 # >0: only failures spaced by >this count as a new onset (labels + TTF)
+
+# Silver treatment variants (require re-running the pipeline, not just `gold --params`).
+silver:
+  telemetry:
+    interpolate: true # false -> leave gaps as NaN (NaN-aware variant; no coverage flag)
+    clip_outliers: false # true -> IQR-winsorise the measures (off by default)
