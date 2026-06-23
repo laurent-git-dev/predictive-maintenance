@@ -37,6 +37,17 @@ cross-source material in a per-chapter appendix.
 
 ---
 
+## Documentation
+- [`docs/TECHNICAL.md`](docs/TECHNICAL.md) — exhaustive technical reference (environment,
+  architecture, repository tree, how to run every treatment / tool / database operation).
+- [`docs/GOLD_DATASET_FR.md`](docs/GOLD_DATASET_FR.md) — business documentation (French): every
+  choice and strategy behind the Gold dataset.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture map · [`docs/MODELING.md`](docs/MODELING.md)
+  — modeling & evaluation protocol · [`docs/adr/`](docs/adr/README.md) — Architecture Decision Records.
+- [`RUNBOOK.md`](RUNBOOK.md) — run → DVC/Git → GitHub.
+
+---
+
 ## 1. Prerequisites
 
 - **Python 3.12** (see `.python-version`)
