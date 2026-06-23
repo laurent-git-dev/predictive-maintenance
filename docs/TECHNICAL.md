@@ -224,12 +224,32 @@ Enforced rule: **kernel ← framework ← use-case** (the framework never import
 | `gold` | `features` | 1 table, grain (machine_id, hour), 253 columns |
 | `meta` | `processing_runs` | one row per pipeline step (lineage) |
 
+**Where to run it.** `docker compose` reads the `docker-compose.yml` in the **current directory**,
+so always run it from the **project root** — the folder that contains `docker-compose.yml` and
+`.env` (here `z:\formation_aelion\project\vs_code`). **Docker Desktop must be running** first
+(Windows: launch *Docker Desktop* and wait for the whale icon to be steady). The `.env` file must
+exist (the compose file reads `POSTGRES_*` from it).
+
 ```powershell
-docker compose up -d                         # start PostgreSQL (container predictive_maintenance_db, 5432)
-docker compose ps                            # check it is "healthy"
-uv run alembic upgrade head                  # create/upgrade bronze + meta schemas
-uv run alembic revision -m "msg"             # new migration (after an ORM change)
+cd z:\formation_aelion\project\vs_code        # project root (where docker-compose.yml lives)
+docker compose up -d                          # start PostgreSQL (container predictive_maintenance_db)
+docker compose ps                             # status — wait until it shows "healthy"
+docker compose logs -f postgres               # (optional) follow the DB logs; Ctrl-C to stop following
+uv run alembic upgrade head                   # create/upgrade the bronze + meta schemas
+
+# Lifecycle
+docker compose stop                           # stop the container (keeps the data volume)
+docker compose down                           # remove the container (data volume `pgdata` is kept)
+docker compose down -v                        # remove the container AND wipe the data (fresh start)
+
+# After an ORM change only:
+uv run alembic revision -m "msg"              # generate a new migration, then `alembic upgrade head`
 ```
+
+> First start pulls the `postgres:16-alpine` image (needs network — behind the proxy, Docker
+> Desktop uses the system certificates). Data persists in the named volume `pgdata` across
+> `up`/`stop`/`down` (only `down -v` deletes it). If port 5432 is busy, change `POSTGRES_PORT` in
+> `.env` and reconnect pgAdmin on that port.
 
 If PostgreSQL is unavailable, DB load is skipped with a warning; Silver/Gold still run on files
 (`--no-db`). The Gold layer then builds from the in-memory Silver frames.
