@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+import pandas as pd
+
 from src import config
 from src.framework.processing.pipeline import ProcessingConfig
 from src.usecase.sources.incidents import runner as incidents_runner
@@ -22,8 +24,8 @@ class SourceSpec:
     """Everything the orchestrator needs to run one source through the layers."""
 
     name: str
-    load_bronze: Callable[[], object]
-    to_silver: Callable[[object], tuple]
+    load_bronze: Callable[[], pd.DataFrame]
+    to_silver: Callable[[pd.DataFrame], tuple[pd.DataFrame, dict]]
     bronze_numeric: list[str]
     silver_numeric: list[str]
     table: str

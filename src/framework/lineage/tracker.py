@@ -20,6 +20,7 @@ import json
 import logging
 import subprocess
 from datetime import datetime
+from typing import Literal
 
 import pandas as pd
 from sqlalchemy.engine import Engine
@@ -112,7 +113,7 @@ class _Step:
             self._s["details"] = dict(details)
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:
         ended = datetime.now()
         status = "failed" if exc_type else "success"
         details = dict(self._s.get("details") or {})

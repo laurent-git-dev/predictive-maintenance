@@ -9,6 +9,7 @@ Helps decide imputation / outlier strategies from the data itself.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -662,13 +663,13 @@ def per_feature_understanding(
     numeric_features: list[str],
     output_dir: Path,
     machine_col: str,
-    count_features: list[str] = (),
+    count_features: Sequence[str] = (),
     count_label: str = "records",
-    keyword_bars: list[tuple[str, list[str], str]] = (),
-    heatmaps: list[tuple[str, str]] = (),
-    timeseries: list[tuple[str, str, str, str]] = (),
-    bars_by_machine: list[str] = (),
-    cumulative: list[tuple[str, str, str]] = (),
+    keyword_bars: Sequence[tuple[str, list[str], str]] = (),
+    heatmaps: Sequence[tuple[str, str]] = (),
+    timeseries: Sequence[tuple[str, str, str, str]] = (),
+    bars_by_machine: Sequence[str] = (),
+    cumulative: Sequence[tuple[str, str, str]] = (),
     feature_plots: dict | None = None,
     source: str | None = None,
 ) -> tuple[list[Path], str]:

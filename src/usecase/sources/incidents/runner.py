@@ -26,8 +26,8 @@ MODEL = IncidentRow  # Bronze validation/flagging schema
 DUP_KEYS = [config.ID_COLUMN]  # duplicate detection key
 RAW_REF = "incidents.csv"  # DataLake input (lineage)
 GOLD_ROLE = "incidents"  # feeds the unified Gold builder's incidents slot
-BRONZE_NUMERIC = []
-SILVER_NUMERIC = []  # severity is ordinal (count only); no continuous numeric in Silver
+BRONZE_NUMERIC: list[str] = []
+SILVER_NUMERIC: list[str] = []  # severity is ordinal (count only); no continuous numeric in Silver
 # Features rendered as an incident-count bar chart (severity is ordinal: kept as a count
 # chart only). Calendar/flag features live in the unified Gold table (built per (machine, hour)).
 COUNT_FEATURES = [

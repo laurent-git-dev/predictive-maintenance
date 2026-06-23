@@ -30,6 +30,7 @@ def ensure_bronze_tables(engine: Engine) -> None:
 def ingest_bronze(name: str, raw_df: pd.DataFrame, engine: Engine | None = None) -> tuple:
     """Validate/flag ``raw_df`` then load into ``bronze.<table>``; returns ``(flagged, status)``."""
     spec = SPECS_BY_NAME[name]
+    assert spec.model is not None, f"source '{name}' has no Pydantic MODEL declared"
     flagged = validate_and_flag(raw_df, spec.model, spec.dup_keys)
     table = spec.table
 

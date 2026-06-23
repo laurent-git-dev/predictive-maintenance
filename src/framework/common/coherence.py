@@ -265,13 +265,13 @@ def _temporal_coverage(dfs: dict[str, pd.DataFrame]) -> tuple[bool, str]:
         if not has_overlap:
             lines.append("- **no common period**: the sources' date ranges do not overlap.")
         if start_spread > tol:
-            early, late = min(starts, key=starts.get), max(starts, key=starts.get)
+            early, late = min(starts, key=lambda s: starts[s]), max(starts, key=lambda s: starts[s])
             lines.append(
                 f"- **start misaligned** by {start_spread.days} days: earliest {_label(early)} "
                 f"({_d(starts[early])}) vs latest {_label(late)} ({_d(starts[late])})."
             )
         if end_spread > tol:
-            early, late = min(ends, key=ends.get), max(ends, key=ends.get)
+            early, late = min(ends, key=lambda s: ends[s]), max(ends, key=lambda s: ends[s])
             lines.append(
                 f"- **end misaligned** by {end_spread.days} days: earliest {_label(early)} "
                 f"({_d(ends[early])}) vs latest {_label(late)} ({_d(ends[late])})."

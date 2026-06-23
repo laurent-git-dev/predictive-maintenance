@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -60,13 +61,13 @@ def run_layer(
     machine_col: str,
     table: str,
     schema: str,
-    count_features: list[str] = (),
+    count_features: Sequence[str] = (),
     count_label: str = "records",
-    keyword_bars: list[tuple[str, list[str], str]] = (),
-    heatmaps: list[tuple[str, str]] = (),
-    timeseries: list[tuple[str, str, str, str]] = (),
-    bars_by_machine: list[str] = (),
-    cumulative: list[tuple[str, str, str]] = (),
+    keyword_bars: Sequence[tuple[str, list[str], str]] = (),
+    heatmaps: Sequence[tuple[str, str]] = (),
+    timeseries: Sequence[tuple[str, str, str, str]] = (),
+    bars_by_machine: Sequence[str] = (),
+    cumulative: Sequence[tuple[str, str, str]] = (),
     feature_plots: dict | None = None,
     encodings: dict | None = None,
     engine=None,

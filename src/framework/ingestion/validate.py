@@ -68,7 +68,7 @@ def validate_and_flag(
         try:
             model.model_validate({k: _clean(v) for k, v in record.items()})
         except ValidationError as exc:
-            tokens.update(_reason_token(e) for e in exc.errors())
+            tokens.update(_reason_token(dict(e)) for e in exc.errors())
         if dup_mask[pos]:
             tokens.add("duplicate")
         oks.append(not tokens)

@@ -33,8 +33,8 @@ BRONZE_ONLY = True
 # Dimension: one row per machine -> no per-machine boxplot (no grouping column).
 MACHINE_COL = ""
 # Capacities are shown as a bar per machine (descending), not a distribution.
-BRONZE_NUMERIC = []
-SILVER_NUMERIC = []
+BRONZE_NUMERIC: list[str] = []
+SILVER_NUMERIC: list[str] = []
 BARS_BY_MACHINE = [config.MACHINE_MAX_DAILY_COLUMN, config.MACHINE_MAX_HOURLY_COLUMN]
 COUNT_FEATURES = [
     config.MACHINE_CRITICALITY_COLUMN,

@@ -255,7 +255,10 @@ SOURCE_FEATURE_CHECKS: dict[tuple[str, str], list[Check]] = {
 
 def _resolve_checks(feature: str, source: str | None) -> list[Check]:
     """Global checks for a feature plus any source-scoped ones."""
-    return list(FEATURE_CHECKS.get(feature, ())) + SOURCE_FEATURE_CHECKS.get((source, feature), [])
+    checks = list(FEATURE_CHECKS.get(feature, ()))
+    if source is not None:
+        checks += SOURCE_FEATURE_CHECKS.get((source, feature), [])
+    return checks
 
 
 def feature_status(

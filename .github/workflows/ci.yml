@@ -26,5 +26,8 @@ jobs:
       - name: Format check (black)
         run: uv run black --check src scripts tests conftest.py alembic
 
+      - name: Type check (mypy)
+        run: uv run mypy
+
       - name: Unit tests (golden tests need data/raw, absent in CI → excluded)
         run: uv run pytest -q -m "not golden"
