@@ -321,6 +321,14 @@ Every `predmaint run` records **one row per step** in `meta.processing_runs`
 uv run python scripts/predmaint.py lineage
 ```
 
+**Web app (Streamlit)** — interactive dashboard reading `meta.processing_runs` (per-batch table,
+rows ingested/rejected chart, steps of a selected batch, refresh):
+```powershell
+uv run streamlit run app/lineage_app.py        # opens http://localhost:8501
+```
+Requires the DB to be up. On the very first launch Streamlit may ask for an email — just press
+Enter to skip (or run headless: `--server.headless true`).
+
 **From the notebook** — the GOLD chapter appendix renders the same via
 `src.framework.lineage.dashboard.lineage_dashboard_markdown(engine)` /
 `tracker.lineage_markdown(engine)`; `dashboard.plot_batches(runs, out_dir)` writes a per-batch
