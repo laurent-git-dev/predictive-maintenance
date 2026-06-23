@@ -2,7 +2,8 @@
 
 Detailed architecture of the predictive-maintenance medallion pipeline. `CLAUDE.md` keeps
 the durable conventions and commands; this file is the map (read it on demand). The code in
-`src/` is the ultimate source of truth.
+`src/` is the ultimate source of truth. The *why* behind structuring decisions lives in
+[Architecture Decision Records](adr/README.md).
 
 ## Layout
 
