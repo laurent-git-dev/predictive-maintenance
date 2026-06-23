@@ -12,6 +12,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Data-contract version: bump when a schema's fields/types/domains change in a
+# backward-incompatible way (the expected parse_reason behaviour is pinned in tests).
+CONTRACT_VERSION = 1
+
 _MACHINE_PATTERN = r"^MACH-\d{2,}$"
 Signal = Annotated[int, Field(ge=0, le=1)]  # binary 0/1 flag
 
