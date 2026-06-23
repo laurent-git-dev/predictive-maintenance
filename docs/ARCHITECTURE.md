@@ -102,7 +102,9 @@ d'artefacts : sources et Gold d'une même exécution partagent le même horodata
 (`artifacts/.../<batch_id>/`). Deux pistes de suivi **complémentaires**, corrélables par cet id :
 `meta.processing_runs` = lignage **DB faisant foi** (hash, qualité, git sha) ; `runs_registry.json`
 = index **fichier** par couche, disponible **sans DB** (mode `--no-db`) et portant `code_version`
-(git sha) pour pointer vers la ligne de lignage correspondante.
+(git sha) pour pointer vers la ligne de lignage correspondante. Vue agrégée par batch :
+`src/framework/lineage/dashboard.py` (`summarize_batches` / `dashboard_markdown`), exposée par
+`predmaint lineage`.
 
 ## Notebook (3 chapters)
 
